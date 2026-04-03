@@ -1,0 +1,34 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Node / package managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env / local config
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+coverage/
+.cache/
+
+# Capacitor / mobile generated artifacts
+ios/DerivedData/
+ios/build/
+ios/App/output/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+
+# Tooling
+*.tsbuildinfo
