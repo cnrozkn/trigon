@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { loadGameProfile, saveGameProfile } from '../utils/Storage.js';
 
 const START_PLAYER_COUNT = 1;
 const MAX_PLAYER_COUNT = 6;
@@ -11,6 +12,7 @@ const BASE_ENEMY_SPAWN_MS = 900;
 const MIN_ENEMY_SPAWN_MS = 260;
 
 const DRAFT_REROLLS = 2;
+const COMBO_WINDOW_MS = 2500;
 
 /** Inner playfield inset from logical screen edges (enemy bounce + frame). */
 const PLAYFIELD_MARGIN = 22;
@@ -100,6 +102,7 @@ export default class PlayScene extends Phaser.Scene {
     this.draftBanishedKeys = new Set();
     this.draftRerollsLeft = 0;
     this.draftChoices = [];
+    this.upgradePicking = false;
 
     this.playLeft = PLAYFIELD_MARGIN;
     this.playRight = 0;
@@ -126,6 +129,38 @@ export default class PlayScene extends Phaser.Scene {
     this.hitStopActive = false;
     this.hitStopRestoreId = null;
     this.screenFlash = null;
+
+    this.audio = null;
+    this.killStreak = 0;
+    this.lastKillAt = 0;
+    this.maxCombo = 0;
+    this.runKills = 0;
+    this.runStartMs = 0;
+    this.selectedUpgrades = [];
+
+    this.pauseButton = null;
+    this.pauseOverlay = null;
+    this.isPausedByUser = false;
+    this.isGameOverScreenVisible = false;
+    this.gameOverOverlay = null;
+    this.gameOverResult = null;
+
+    this.profile = loadGameProfile();
+    this.shieldFlashUntil = 0;
+    this.shieldFlashIndex = -1;
+    this.onboardingActive = false;
+    this.onboardingIndex = 0;
+    this.onboardingOverlay = null;
+    this.onboardingTimer = null;
+    this.onboardingArrow = null;
+    this.onboardingPreviewBullet = null;
+    this.onboardingEnemyPreview = null;
+
+    this.hudLevel = null;
+    this.hudCombo = null;
+    this.hudShields = null;
+    this.progressBarBg = null;
+    this.progressBarFill = null;
   }
 
   /** World bounds: narrow X for side bounce; open top/bottom for spawn & recycle. */
@@ -217,11 +252,20 @@ export default class PlayScene extends Phaser.Scene {
     this.relayoutFleet();
 
     this.hudScore.setPosition(16, 16);
+    if (this.hudLevel) this.hudLevel.setPosition(16, 40);
+    if (this.progressBarBg) this.progressBarBg.setPosition(74, 66);
+    if (this.progressBarFill) this.progressBarFill.setPosition(74, 66);
+    if (this.hudCombo) this.hudCombo.setPosition(width * 0.5, 88);
+    if (this.pauseButton) this.pauseButton.setPosition(width - 24, 24);
+    if (this.hudShields) this.drawHudShields();
 
     if (this.overlayBg) {
       this.overlayBg.setPosition(width * 0.5, height * 0.5);
       this.overlayBg.setSize(width, height);
     }
+    if (this.isPausedByUser) this.renderPauseOverlay();
+    if (this.isGameOverScreenVisible) this.renderGameOverOverlay();
+    if (this.onboardingActive) this.renderOnboardingStep();
 
     this.enemies.children.iterate((e) => {
       if (!e || !e.active) return true;
@@ -237,6 +281,9 @@ export default class PlayScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.ensureStageOneTextures();
     this.createBackgroundLayer(width, height);
+    this.audio = this.registry.get('audio') || null;
+    this.audio?.startMusic();
+    this.syncAudioSceneState();
 
     this.applyPlayfieldWorldBounds(width, height);
     this.drawPlayfieldFrame(width, height);
@@ -311,6 +358,7 @@ export default class PlayScene extends Phaser.Scene {
     this.formationX = width / 2;
     this.targetFormationX = this.formationX;
     this.prevFormationX = this.formationX;
+    this.runStartMs = this.time.now;
     this.shieldRingG = this.add.graphics().setDepth(12);
     this.screenFlash = this.add
       .rectangle(width * 0.5, height * 0.5, width, height, 0xffffff, 0)
@@ -326,11 +374,45 @@ export default class PlayScene extends Phaser.Scene {
         color: '#aaffff',
       })
       .setDepth(100);
+    this.hudLevel = this.add
+      .text(16, 40, 'LV.1', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#ccddff',
+      })
+      .setDepth(100);
+    this.progressBarBg = this.add.rectangle(74, 66, 112, 8, 0x172236, 0.95).setDepth(100).setOrigin(0, 0.5);
+    this.progressBarFill = this.add.rectangle(74, 66, 112, 8, 0x66cfff, 1).setDepth(101).setOrigin(0, 0.5);
+    this.hudShields = this.add.graphics().setDepth(100);
+    this.hudCombo = this.add
+      .text(width * 0.5, 88, 'x0', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '30px',
+        fontStyle: 'bold',
+        color: '#ffe080',
+      })
+      .setOrigin(0.5)
+      .setDepth(110)
+      .setAlpha(0);
+    this.pauseButton = this.add
+      .text(width - 24, 24, '||', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#d7e8ff',
+      })
+      .setOrigin(1, 0.5)
+      .setDepth(120)
+      .setInteractive({ useHandCursor: true });
+    this.pauseButton.on('pointerdown', () => this.togglePauseByUser());
 
     this.overlayBg = this.add
       .rectangle(width * 0.5, height * 0.5, width, height, 0x04050a, 0)
       .setDepth(180)
       .setVisible(false);
+    this.pauseOverlay = this.add.container(0, 0).setDepth(230).setVisible(false);
+    this.gameOverOverlay = this.add.container(0, 0).setDepth(250).setVisible(false);
 
     this.physics.add.overlap(this.bullets, this.enemies, this.onBulletHitEnemy, undefined, this);
     this.physics.add.overlap(this.players, this.enemies, this.onPlayerHitEnemy, undefined, this);
@@ -345,14 +427,21 @@ export default class PlayScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer) => {
-      if (!this.gameOver && !this.isChoosingUpgrade) this.targetFormationX = pointer.worldX;
+      if (!this.gameOver && !this.isChoosingUpgrade && !this.onboardingActive) this.targetFormationX = pointer.worldX;
     });
     this.input.on('pointerdown', (pointer) => {
+      this.audio?.resume();
+      if (this.onboardingActive) {
+        this.advanceOnboarding();
+        return;
+      }
       if (!this.gameOver && !this.isChoosingUpgrade) this.targetFormationX = pointer.worldX;
     });
 
     this.onResize = (gameSize) => this.handleResize(gameSize);
     this.scale.on('resize', this.onResize);
+    this.updateHud();
+    if (this.profile.totalGamesPlayed === 0) this.startOnboarding();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.onResize);
       if (this.playfieldFrame) this.playfieldFrame.destroy();
@@ -363,12 +452,21 @@ export default class PlayScene extends Phaser.Scene {
         clearTimeout(this.hitStopRestoreId);
         this.hitStopRestoreId = null;
       }
+      if (this.onboardingTimer) {
+        this.onboardingTimer.remove(false);
+        this.onboardingTimer = null;
+      }
+      this.audio?.setSceneState({ level: this.currentLevel, isBoss: false, inUpgrade: false });
     });
   }
 
   update(_time, delta) {
     this.updateBackgroundFx(delta);
-    if (this.gameOver || this.isChoosingUpgrade) return;
+    if (this.gameOver || this.isChoosingUpgrade || this.isPausedByUser || this.onboardingActive) return;
+    if (this.killStreak > 0 && this.time.now - this.lastKillAt > COMBO_WINDOW_MS) {
+      this.killStreak = 0;
+      this.updateComboHud();
+    }
 
     const { width } = this.scale;
     const minX = this.playLeft + this.playerHalfSpread;
@@ -439,6 +537,7 @@ export default class PlayScene extends Phaser.Scene {
     });
     this.drawShieldRings();
     this.prevFormationX = this.formationX;
+    this.updateProgressBar();
   }
 
   updateBackgroundFx(delta = 16.6) {
@@ -596,6 +695,394 @@ export default class PlayScene extends Phaser.Scene {
       this.hitStopActive = false;
       this.hitStopRestoreId = null;
     }, durationMs);
+  }
+
+  syncAudioSceneState() {
+    if (!this.audio) return;
+    this.audio.setSceneState({
+      level: this.currentLevel,
+      isBoss: this.hasActiveBoss(),
+      inUpgrade: this.isChoosingUpgrade,
+    });
+  }
+
+  updateKillStreakOnKill() {
+    const now = this.time.now;
+    if (this.killStreak > 0 && now - this.lastKillAt <= COMBO_WINDOW_MS) this.killStreak += 1;
+    else this.killStreak = 1;
+    this.lastKillAt = now;
+    this.maxCombo = Math.max(this.maxCombo, this.killStreak);
+    this.updateComboHud();
+    this.audio?.playKillStreakNote(this.killStreak);
+  }
+
+  getRunStats() {
+    const runDurationMs = Math.max(0, Math.floor(this.time.now - this.runStartMs));
+    return {
+      score: this.score,
+      level: this.currentLevel,
+      runKills: this.runKills,
+      maxCombo: this.maxCombo,
+      runDurationMs,
+      selectedUpgrades: [...this.selectedUpgrades],
+    };
+  }
+
+  persistRunStats() {
+    const run = this.getRunStats();
+    const prev = loadGameProfile();
+    const next = {
+      highScore: Math.max(prev.highScore, run.score),
+      bestLevel: Math.max(prev.bestLevel, run.level),
+      totalGamesPlayed: prev.totalGamesPlayed + 1,
+      totalKills: prev.totalKills + run.runKills,
+      totalPlayTimeMs: prev.totalPlayTimeMs + run.runDurationMs,
+    };
+    this.profile = next;
+    saveGameProfile(next);
+    return { run, profile: next, isNewBest: run.score > prev.highScore };
+  }
+
+  formatDuration(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  }
+
+  updateHud() {
+    this.hudScore?.setText(`Score: ${this.score}`);
+    this.hudLevel?.setText(`LV.${this.currentLevel}`);
+    this.updateProgressBar();
+    this.drawHudShields();
+    this.updateComboHud();
+  }
+
+  updateProgressBar() {
+    if (!this.progressBarFill) return;
+    const ratio = Phaser.Math.Clamp(this.killsThisLevel / KILLS_PER_LEVEL, 0, 1);
+    const width = 112;
+    this.progressBarFill.width = Math.max(2, width * ratio);
+    const hue = this.currentLevel < 5 ? 0x66cfff : this.currentLevel < 10 ? 0xaa88ff : this.currentLevel < 15 ? 0xff7799 : 0xffb455;
+    this.progressBarFill.setFillStyle(hue, 1);
+  }
+
+  drawHudShields() {
+    if (!this.hudShields) return;
+    this.hudShields.clear();
+    const startX = 20;
+    const y = this.scale.height - 18;
+    const maxIcons = 5;
+    for (let i = 0; i < maxIcons; i++) {
+      const x = startX + i * 14;
+      this.hudShields.fillStyle(0x224466, 0.5);
+      this.hudShields.fillCircle(x, y, 4.8);
+    }
+    for (let i = 0; i < this.shieldCharges; i++) {
+      const x = startX + i * 14;
+      this.hudShields.fillStyle(0x77bbff, 0.9);
+      this.hudShields.fillCircle(x, y, 4.8);
+    }
+    if (this.shieldFlashUntil > this.time.now && this.shieldFlashIndex >= 0) {
+      const x = startX + this.shieldFlashIndex * 14;
+      const ratio = Phaser.Math.Clamp((this.shieldFlashUntil - this.time.now) / 220, 0, 1);
+      this.hudShields.fillStyle(0xff5566, 0.35 + ratio * 0.55);
+      this.hudShields.fillCircle(x, y, 5.8);
+    }
+  }
+
+  updateComboHud() {
+    if (!this.hudCombo) return;
+    if (this.killStreak > 1) {
+      this.hudCombo.setText(`x${this.killStreak}`);
+      this.hudCombo.setAlpha(1);
+    } else {
+      this.hudCombo.setAlpha(0);
+    }
+  }
+
+  setPlayflowPaused(paused) {
+    if (paused) {
+      this.physics.pause();
+      if (this.fireTimer) this.fireTimer.paused = true;
+      if (this.spawnTimer) this.spawnTimer.paused = true;
+      if (this.upgradeTimer) this.upgradeTimer.paused = true;
+    } else {
+      this.physics.resume();
+      if (this.fireTimer) this.fireTimer.paused = false;
+      if (this.spawnTimer) this.spawnTimer.paused = false;
+      if (this.upgradeTimer) this.upgradeTimer.paused = false;
+    }
+  }
+
+  togglePauseByUser() {
+    if (this.gameOver || this.isChoosingUpgrade || this.isGameOverScreenVisible || this.onboardingActive) return;
+    this.isPausedByUser = !this.isPausedByUser;
+    if (this.isPausedByUser) {
+      this.setPlayflowPaused(true);
+      this.renderPauseOverlay();
+      this.overlayBg.setVisible(true).setAlpha(0.5);
+    } else {
+      if (this.pauseOverlay) this.pauseOverlay.setVisible(false);
+      this.overlayBg.setVisible(false).setAlpha(0);
+      this.setPlayflowPaused(false);
+    }
+  }
+
+  renderPauseOverlay() {
+    if (!this.pauseOverlay) return;
+    this.pauseOverlay.removeAll(true);
+    const { width, height } = this.scale;
+    const audioSettings = this.audio?.getSettings?.() || { sfxVolume: 0.85, musicVolume: 0.65 };
+
+    const title = this.add
+      .text(width * 0.5, height * 0.32, 'PAUSED', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '40px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+
+    const makeBtn = (label, y, handler) =>
+      this.add
+        .text(width * 0.5, y, label, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '22px',
+          fontStyle: 'bold',
+          color: '#d9ebff',
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', handler);
+
+    const createVolumeSlider = (label, y, value, onChange) => {
+      const title = this.add
+        .text(width * 0.5 - 120, y, label, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          fontStyle: 'bold',
+          color: '#c9daef',
+        })
+        .setOrigin(0, 0.5);
+
+      const barW = 170;
+      const barH = 12;
+      const barX = width * 0.5 - 8;
+      const bg = this.add
+        .rectangle(barX, y, barW, barH, 0x1a2a40, 0.95)
+        .setOrigin(0, 0.5)
+        .setStrokeStyle(1, 0x6a89ad, 0.8)
+        .setInteractive({ useHandCursor: true });
+      const fill = this.add.rectangle(barX, y, barW * Phaser.Math.Clamp(value, 0, 1), barH, 0x76c3ff, 1).setOrigin(0, 0.5);
+      const knob = this.add.circle(barX + barW * Phaser.Math.Clamp(value, 0, 1), y, 8, 0xe9f4ff, 1).setStrokeStyle(2, 0x5fa8e0, 1);
+      const pct = this.add
+        .text(barX + barW + 14, y, `${Math.round(Phaser.Math.Clamp(value, 0, 1) * 100)}`, {
+          fontFamily: 'ui-monospace, monospace',
+          fontSize: '13px',
+          color: '#d6e8ff',
+        })
+        .setOrigin(0, 0.5);
+
+      const update = (worldX) => {
+        const ratio = Phaser.Math.Clamp((worldX - barX) / barW, 0, 1);
+        fill.width = Math.max(2, barW * ratio);
+        knob.x = barX + barW * ratio;
+        pct.setText(`${Math.round(ratio * 100)}`);
+        onChange(ratio);
+      };
+
+      bg.on('pointerdown', (pointer) => update(pointer.worldX));
+      knob.setInteractive({ useHandCursor: true });
+      knob.on('pointerdown', (pointer) => update(pointer.worldX));
+      bg.on('pointermove', (pointer) => {
+        if (pointer.isDown) update(pointer.worldX);
+      });
+
+      return [title, bg, fill, knob, pct];
+    };
+
+    const sfxSliderItems = createVolumeSlider('SFX', height * 0.435, audioSettings.sfxVolume ?? 0.85, (v) => {
+      this.audio?.setSfxVolume(v);
+    });
+    const musicSliderItems = createVolumeSlider('Music', height * 0.485, audioSettings.musicVolume ?? 0.65, (v) => {
+      this.audio?.setMusicVolume(v);
+    });
+
+    const resume = makeBtn('Resume', height * 0.57, () => this.togglePauseByUser());
+    const restart = makeBtn('Restart', height * 0.64, () => this.scene.restart());
+    const menu = makeBtn('Menu', height * 0.71, () => this.scene.start('Menu'));
+
+    this.pauseOverlay.add([title, ...sfxSliderItems, ...musicSliderItems, resume, restart, menu]);
+    this.pauseOverlay.setVisible(true);
+  }
+
+  startOnboarding() {
+    if (this.onboardingActive) return;
+    this.onboardingActive = true;
+    this.onboardingIndex = 0;
+    if (this.pauseButton) this.pauseButton.setVisible(false);
+    this.setPlayflowPaused(true);
+    this.overlayBg.setVisible(true).setAlpha(0.62);
+    this.renderOnboardingStep();
+  }
+
+  renderOnboardingStep() {
+    if (this.onboardingOverlay) this.onboardingOverlay.destroy(true);
+    const { width, height } = this.scale;
+    const steps = [
+      {
+        title: 'Hareket',
+        body: 'Hareket ettirmek icin surukle.',
+      },
+      {
+        title: 'Ates',
+        body: 'Gemin otomatik ates eder.',
+      },
+      {
+        title: 'Kacin',
+        body: 'Dusmanlarla carpisma. Hayatta kal.',
+      },
+    ];
+    const step = steps[this.onboardingIndex] || steps[steps.length - 1];
+    const container = this.add.container(0, 0).setDepth(245);
+    const panel = this.add.rectangle(width * 0.5, height * 0.5, width * 0.82, height * 0.46, 0x0d1320, 0.95).setStrokeStyle(2, 0x66aaff, 0.9);
+    const title = this.add
+      .text(width * 0.5, height * 0.37, step.title, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '34px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+    const body = this.add
+      .text(width * 0.5, height * 0.47, step.body, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '20px',
+        color: '#d8e8ff',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+    const indicator = this.add
+      .text(width * 0.5, height * 0.67, `Adim ${this.onboardingIndex + 1}/3 - Dokun gec`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#9db2cc',
+      })
+      .setOrigin(0.5);
+
+    const demoItems = [];
+    if (this.onboardingIndex === 0) {
+      const arrow = this.add.text(width * 0.5, height * 0.56, '<   >', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '24px',
+        color: '#88ddff',
+      }).setOrigin(0.5);
+      this.tweens.add({ targets: arrow, x: width * 0.5 + 70, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      demoItems.push(arrow);
+      this.onboardingArrow = arrow;
+    } else if (this.onboardingIndex === 1) {
+      const bullet = this.add.image(width * 0.5, height * 0.6, 'bullet').setScale(1.4);
+      this.tweens.add({ targets: bullet, y: height * 0.53, alpha: 0.3, duration: 450, repeat: -1 });
+      demoItems.push(bullet);
+      this.onboardingPreviewBullet = bullet;
+    } else {
+      const enemy = this.add.image(width * 0.5, height * 0.6, 'enemy').setScale(1.2).setTint(0xff6688);
+      this.tweens.add({ targets: enemy, y: height * 0.65, duration: 700, yoyo: true, repeat: -1 });
+      demoItems.push(enemy);
+      this.onboardingEnemyPreview = enemy;
+    }
+
+    container.add([panel, title, body, indicator, ...demoItems]);
+    this.onboardingOverlay = container;
+
+    if (this.onboardingTimer) this.onboardingTimer.remove(false);
+    this.onboardingTimer = this.time.delayedCall(2000, () => this.advanceOnboarding());
+  }
+
+  advanceOnboarding() {
+    if (!this.onboardingActive) return;
+    this.onboardingIndex += 1;
+    if (this.onboardingIndex >= 3) {
+      this.onboardingActive = false;
+      if (this.onboardingOverlay) {
+        this.onboardingOverlay.destroy(true);
+        this.onboardingOverlay = null;
+      }
+      if (this.onboardingTimer) {
+        this.onboardingTimer.remove(false);
+        this.onboardingTimer = null;
+      }
+      this.overlayBg.setVisible(false).setAlpha(0);
+      this.setPlayflowPaused(false);
+      if (this.pauseButton) this.pauseButton.setVisible(true);
+      return;
+    }
+    this.renderOnboardingStep();
+  }
+
+  renderGameOverOverlay() {
+    if (!this.gameOverOverlay) return;
+    this.gameOverOverlay.removeAll(true);
+    const { width, height } = this.scale;
+    const result = this.gameOverResult || this.persistRunStats();
+    const run = result.run;
+    const profile = result.profile;
+    const upgrades = run.selectedUpgrades.length > 0 ? run.selectedUpgrades.join(', ') : '-';
+
+    const title = this.add
+      .text(width * 0.5, height * 0.2, 'GAME OVER', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '46px',
+        fontStyle: 'bold',
+        color: '#ff6677',
+      })
+      .setOrigin(0.5);
+
+    const lines = [
+      `Score: ${run.score}`,
+      `Level: ${run.level}`,
+      result.isNewBest ? 'NEW BEST!' : `Best: ${profile.highScore}`,
+      `Kills: ${run.runKills}`,
+      `Time: ${this.formatDuration(run.runDurationMs)}`,
+      `Max Combo: x${run.maxCombo}`,
+      `Upgrades: ${upgrades}`,
+    ];
+
+    const stats = this.add
+      .text(width * 0.5, height * 0.42, lines.join('\n'), {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '18px',
+        color: '#e6f1ff',
+        align: 'center',
+        lineSpacing: 6,
+        wordWrap: { width: width * 0.85 },
+      })
+      .setOrigin(0.5);
+
+    const retry = this.add
+      .text(width * 0.5, height * 0.72, 'Tap to Retry', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '26px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.scene.restart());
+
+    const menu = this.add
+      .text(width * 0.5, height * 0.79, 'Menu', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '20px',
+        color: '#cce0ff',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.scene.start('Menu'));
+
+    this.gameOverOverlay.add([title, stats, retry, menu]);
+    this.gameOverOverlay.setVisible(true);
   }
 
   getCurrentFireDelay() {
@@ -819,6 +1306,7 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   hasActiveBoss() {
+    if (!this.enemies) return false;
     let found = false;
     this.enemies.children.iterate((e) => {
       if (e && e.active && e.getData('isBoss')) found = true;
@@ -837,6 +1325,7 @@ export default class PlayScene extends Phaser.Scene {
     const cx = (this.playLeft + this.playRight) * 0.5;
     const hp = 35 + this.currentLevel * 6;
     this.spawnEnemyAt(cx, -88, hp, true, 0, 0);
+    this.syncAudioSceneState();
     return true;
   }
 
@@ -849,6 +1338,18 @@ export default class PlayScene extends Phaser.Scene {
     this.resetSpawnTimer();
     this.resetFireTimer();
     this.pulsePlayfieldFrame();
+    if (this.progressBarBg) {
+      this.tweens.add({
+        targets: this.progressBarBg,
+        alpha: 0.25,
+        duration: 90,
+        yoyo: true,
+        repeat: 2,
+      });
+    }
+    this.audio?.playLevelUp();
+    this.syncAudioSceneState();
+    this.updateHud();
     if (bossSpawned) this.fireFleet();
   }
 
@@ -888,6 +1389,7 @@ export default class PlayScene extends Phaser.Scene {
 
   fireFleet() {
     if (this.gameOver || this.isChoosingUpgrade) return;
+    this.audio?.playFire();
 
     this.players.children.iterate((p) => {
       if (!p || !p.active) return true;
@@ -924,6 +1426,8 @@ export default class PlayScene extends Phaser.Scene {
 
     const crit = Math.random() < this.getCritChance();
     const damage = this.getBulletDamage() * (crit ? 2 : 1);
+    this.audio?.playHit();
+    if (crit) this.audio?.playCrit();
 
     const pierceLeft = bullet.getData('pierceLeft') || 0;
     if (pierceLeft <= 0) {
@@ -961,6 +1465,9 @@ export default class PlayScene extends Phaser.Scene {
     const x = enemy.x;
     const y = enemy.y;
     const isBoss = enemy.getData('isBoss');
+    this.updateKillStreakOnKill();
+    if (isBoss) this.audio?.playBossDeath();
+    else this.audio?.playEnemyDeath();
 
     this.sparkle.explode(isBoss ? 28 : 14, x, y);
     this.deathBurst.explode(isBoss ? 36 : 18, x, y);
@@ -971,14 +1478,16 @@ export default class PlayScene extends Phaser.Scene {
     this.recycleEnemy(enemy);
 
     this.score += isBoss ? 250 : 10;
-    this.hudScore.setText(`Score: ${this.score}`);
+    this.runKills += 1;
 
     this.killsThisLevel += 1;
+    this.syncAudioSceneState();
+    this.updateHud();
     if (this.killsThisLevel >= KILLS_PER_LEVEL) this.applyLevelUp();
   }
 
   openUpgradeSelection() {
-    if (this.gameOver || this.isChoosingUpgrade) return;
+    if (this.gameOver || this.isChoosingUpgrade || this.onboardingActive || this.isPausedByUser) return;
 
     this.draftBanishedKeys = new Set();
     this.draftRerollsLeft = DRAFT_REROLLS;
@@ -987,10 +1496,10 @@ export default class PlayScene extends Phaser.Scene {
     if (this.draftChoices.length === 0) return;
 
     this.isChoosingUpgrade = true;
+    this.syncAudioSceneState();
+    if (this.pauseButton) this.pauseButton.setVisible(false);
     if (this.shieldRingG) this.shieldRingG.clear();
-    this.physics.pause();
-    if (this.fireTimer) this.fireTimer.paused = true;
-    if (this.spawnTimer) this.spawnTimer.paused = true;
+    this.setPlayflowPaused(true);
 
     const { width, height } = this.scale;
     this.overlayBg.setVisible(true);
@@ -1011,6 +1520,7 @@ export default class PlayScene extends Phaser.Scene {
 
   doDraftReroll() {
     if (!this.isChoosingUpgrade || this.draftRerollsLeft <= 0) return;
+    this.audio?.playReroll();
 
     const prev = this.draftChoices.slice();
     this.draftRerollsLeft -= 1;
@@ -1025,6 +1535,7 @@ export default class PlayScene extends Phaser.Scene {
 
   banishDraftSlot(index) {
     if (!this.isChoosingUpgrade || !this.draftChoices[index]) return;
+    this.audio?.playBanish();
 
     const oldKey = this.draftChoices[index].key;
     this.draftBanishedKeys.add(oldKey);
@@ -1081,7 +1592,7 @@ export default class PlayScene extends Phaser.Scene {
     }
 
     const hint = this.add
-      .text(width * 0.5, height * 0.36, 'Banish = bu draftta bir kartı havuzdan çıkar', {
+      .text(width * 0.5, height * 0.36, 'Banish removes one card from this draft pool.', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '11px',
         color: '#8899aa',
@@ -1090,19 +1601,25 @@ export default class PlayScene extends Phaser.Scene {
 
     const startX = width * 0.2;
     const gap = width * 0.3;
+    const rarityGlow = {
+      Common: 0x33cc88,
+      Rare: 0x55aaff,
+      Epic: 0xaa66ff,
+    };
     const cardItems = [];
 
     this.draftChoices.forEach((choice, i) => {
       const x = startX + i * gap;
       const y = height * 0.54;
-
+      const cardContainer = this.add.container(x, y + 42).setAlpha(0);
+      const glow = this.add.rectangle(0, 0, 126, 166, rarityGlow[choice.rarity] || choice.color, 0.12);
       const card = this.add
-        .rectangle(x, y, 112, 152, 0x0f1320, 0.95)
+        .rectangle(0, 0, 112, 152, 0x0f1320, 0.95)
         .setStrokeStyle(2, choice.color, 1)
         .setInteractive({ useHandCursor: true });
 
       const rarity = this.add
-        .text(x, y - 58, choice.rarity, {
+        .text(0, -58, choice.rarity, {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '11px',
           color: '#99bbff',
@@ -1110,7 +1627,7 @@ export default class PlayScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       const name = this.add
-        .text(x, y - 38, choice.label, {
+        .text(0, -38, choice.label, {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '14px',
           fontStyle: 'bold',
@@ -1121,7 +1638,7 @@ export default class PlayScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       const stackLine = this.add
-        .text(x, y - 12, this.getStackLabelForCard(choice), {
+        .text(0, -12, this.getStackLabelForCard(choice), {
           fontFamily: 'ui-monospace, monospace',
           fontSize: '11px',
           color: '#ffeeaa',
@@ -1129,7 +1646,7 @@ export default class PlayScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       const desc = this.add
-        .text(x, y + 18, choice.desc, {
+        .text(0, 18, choice.desc, {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '11px',
           color: '#bdeeff',
@@ -1139,7 +1656,7 @@ export default class PlayScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       const banishBtn = this.add
-        .text(x, y + 62, 'Banish', {
+        .text(0, 62, 'Banish', {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '12px',
           color: '#ff88aa',
@@ -1151,19 +1668,53 @@ export default class PlayScene extends Phaser.Scene {
       banishBtn.on('pointerout', () => banishBtn.setColor('#ff88aa'));
       banishBtn.on('pointerdown', () => this.banishDraftSlot(i));
 
-      card.on('pointerover', () => card.setFillStyle(0x171d30, 0.98));
-      card.on('pointerout', () => card.setFillStyle(0x0f1320, 0.95));
-      card.on('pointerdown', () => this.applyUpgradeChoice(choice.key));
+      card.on('pointerover', () => {
+        card.setFillStyle(0x171d30, 0.98);
+        glow.setAlpha(0.25);
+        cardContainer.setScale(1.04);
+      });
+      card.on('pointerout', () => {
+        card.setFillStyle(0x0f1320, 0.95);
+        glow.setAlpha(0.12);
+        cardContainer.setScale(1);
+      });
+      card.on('pointerdown', () => this.beginUpgradePick(choice.key, cardContainer, card, glow));
 
-      cardItems.push(card, rarity, name, stackLine, desc, banishBtn);
+      cardContainer.add([glow, card, rarity, name, stackLine, desc, banishBtn]);
+      this.tweens.add({
+        targets: cardContainer,
+        y,
+        alpha: 1,
+        duration: 260,
+        ease: 'Back.easeOut',
+        delay: 60 + i * 60,
+      });
+      cardItems.push(cardContainer);
     });
 
     container.add([title, rerollBtn, hint, ...cardItems]);
     this.upgradeModal = container;
+    this.upgradePicking = false;
+  }
+
+  beginUpgradePick(key, cardContainer, card, glow) {
+    if (!this.isChoosingUpgrade || this.upgradePicking) return;
+    this.upgradePicking = true;
+    card.disableInteractive();
+    glow.setAlpha(0.4);
+    this.tweens.add({
+      targets: cardContainer,
+      scaleX: 0.06,
+      duration: 90,
+      ease: 'Sine.easeIn',
+      yoyo: true,
+      onComplete: () => this.applyUpgradeChoice(key),
+    });
   }
 
   applyUpgradeChoice(key) {
     if (!this.isChoosingUpgrade) return;
+    this.audio?.playUpgradeSelect();
 
     if (key === 'fire') {
       this.fireRateLevel += 1;
@@ -1183,6 +1734,13 @@ export default class PlayScene extends Phaser.Scene {
     } else if (key === 'frost') {
       this.frostLevel += 1;
     }
+    const picked = UPGRADE_DEFS.find((u) => u.key === key);
+    this.selectedUpgrades.push(picked ? picked.label : key);
+    if (picked) this.showFloatingText(`Upgrade Acquired: ${picked.label}`, this.scale.width * 0.5, 120, {
+      color: '#88ffd5',
+      size: 18,
+      duration: 1000,
+    });
 
     if (this.upgradeModal) {
       this.upgradeModal.destroy(true);
@@ -1196,18 +1754,24 @@ export default class PlayScene extends Phaser.Scene {
     this.draftChoices = [];
     this.draftBanishedKeys = new Set();
     this.draftRerollsLeft = 0;
+    this.upgradePicking = false;
 
-    this.physics.resume();
-    if (this.fireTimer) this.fireTimer.paused = false;
-    if (this.spawnTimer) this.spawnTimer.paused = false;
+    this.setPlayflowPaused(false);
+    if (this.pauseButton) this.pauseButton.setVisible(true);
+    this.updateHud();
+    this.syncAudioSceneState();
   }
 
   onPlayerHitEnemy(player, enemy) {
     if (this.gameOver || !enemy.active || this.isChoosingUpgrade) return;
 
     if (this.shieldCharges > 0) {
+      this.shieldFlashIndex = this.shieldCharges - 1;
+      this.shieldFlashUntil = this.time.now + 220;
       this.shieldCharges -= 1;
+      this.audio?.playShieldAbsorb();
       this.killEnemy(enemy);
+      this.updateHud();
       return;
     }
 
@@ -1229,6 +1793,9 @@ export default class PlayScene extends Phaser.Scene {
 
   triggerGameOver(playerSprite) {
     this.gameOver = true;
+    this.killStreak = 0;
+    this.audio?.playGameOver();
+    this.audio?.stopMusic();
     if (this.shieldRingG) this.shieldRingG.clear();
 
     if (this.spawnTimer) this.spawnTimer.remove(false);
@@ -1263,8 +1830,12 @@ export default class PlayScene extends Phaser.Scene {
       return true;
     });
 
-    this.time.delayedCall(1600, () => {
-      this.scene.start('Menu');
+    this.time.delayedCall(420, () => {
+      this.gameOverResult = this.persistRunStats();
+      this.isGameOverScreenVisible = true;
+      if (this.pauseButton) this.pauseButton.setVisible(false);
+      this.overlayBg.setVisible(true).setAlpha(0.68);
+      this.renderGameOverOverlay();
     });
   }
 }

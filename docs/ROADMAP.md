@@ -1,6 +1,6 @@
 # TRIGON — Geliştirme Yol Haritası (ROADMAP)
 
-> **Son Güncelleme:** 3 Nisan 2026  
+> **Son Güncelleme:** 3 Nisan 2026 (Aşama 0 + Aşama 2 teslimat güncellemesi)  
 > **Referans:** [PRD.md](./PRD.md)  
 > **Kullanım:** Her aşama bağımsız olarak AI'a verilebilir. Aşamalar sırasıyla yapılmalıdır.
 
@@ -25,6 +25,8 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 
 ## AŞAMA 0: TECH STACK GÜNCELLEMESİ
 
+**Durum:** Büyük ölçüde tamamlandı (konfigürasyon + build/dev + CLI tooling doğrulandı, Android Studio GUI kontrolü manuel beklemede)
+
 **Hedef:** Tüm bağımlılıkları en stabil ve güncel sürümlere yükselt. Mağaza gereksinimlerini karşılayacak tooling kurulumunu yap.
 
 **Tahmini Efor:** Düşük  
@@ -44,24 +46,24 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 | @capacitor/cli (dev) | ^6.2.0 | **^8.3.0** | ⬆️ Major upgrade |
 
 **Yapılacaklar:**
-- [ ] Node.js 22 LTS kurulumu doğrula: `node -v` → v22.x olmalı
-- [ ] `package.json` bağımlılıklarını güncelle
-- [ ] `npm install` ile temiz kurulum
-- [ ] Vite 8 breaking changes kontrol:
+- [x] Node.js 22 LTS kurulumu doğrula: `node -v` → v22.x olmalı
+- [x] `package.json` bağımlılıklarını güncelle
+- [x] `npm install` ile temiz kurulum
+- [x] Vite 8 breaking changes kontrol:
   - `vite.config.js` syntax uyumu
   - `optimizeDeps` yapılandırması hala geçerli mi
   - Phaser alias hala çalışıyor mu
-- [ ] Capacitor 8 migration:
+- [x] Capacitor 8 migration:
   - `capacitor.config.json` → `capacitor.config.ts` (opsiyonel ama önerilen)
   - `appId` alanı eklenmeli (örn: `com.trigon.game`)
   - `webDir: 'dist'` doğrulanmalı
-- [ ] `npm run dev` ile oyunun hala çalıştığını doğrula
-- [ ] `npm run build` ile production build başarılı mı kontrol et
+- [x] `npm run dev` ile oyunun hala çalıştığını doğrula
+- [x] `npm run build` ile production build başarılı mı kontrol et
 
 ### 0.2 Vite Config Güncellemesi
 
 **Yapılacaklar:**
-- [ ] `vite.config.js` güncelle:
+- [x] `vite.config.js` güncelle:
   ```javascript
   import { defineConfig } from 'vite';
 
@@ -88,7 +90,7 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 ### 0.3 Capacitor Config Güncellemesi
 
 **Yapılacaklar:**
-- [ ] `capacitor.config.json` güncelle:
+- [x] `capacitor.config.json` güncelle:
   ```json
   {
     "appId": "com.trigon.game",
@@ -110,7 +112,7 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 ### 0.4 Geliştirme Araçları Doğrulama
 
 **Yapılacaklar:**
-- [ ] Aşağıdaki araçların minimum sürümlerini kontrol et:
+- [x] Aşağıdaki araçların minimum sürümlerini kontrol et:
 
   | Araç | Minimum | Kontrol Komutu |
   |------|---------|----------------|
@@ -122,8 +124,19 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
   | JDK | 17+ | `java -version` |
   | CocoaPods | 1.16+ | `pod --version` |
 
-- [ ] Eksik araçlar varsa kurulum notlarını belge
-- [ ] Bu kontroller Aşama 7'de tekrar gerekecek — burada temel hazırlık yapılır
+- [x] Eksik araçlar varsa kurulum notlarını belge
+- [x] Bu kontroller Aşama 7'de tekrar gerekecek — burada temel hazırlık yapılır
+
+**Doğrulama Notları (3 Nisan 2026):**
+- Node.js: `v22.21.1` ✅ (hedef: 22.x)
+- npm: `10.9.4` ✅ (hedef: 10.x+)
+- Xcode: `26.2` ✅ (hedef: 26.0+)
+- macOS: `15.7.3` ✅ (hedef: Sequoia 15.6+)
+- JDK: `21.0.9` ✅ (hedef: 17+)
+- CocoaPods: `1.16.2` ✅ (hedef: 1.16+)
+- Android Studio: CLI üzerinden doğrulanamadı; **About ekranından manuel kontrol bekliyor** ⏳
+- `npm run dev`: Vite 8.0.3 sağlıklı açıldı (`http://localhost:5173`) ✅
+- `npm run build`: production build başarılı ✅
 
 ### 0.5 package.json Hedef Durumu
 
@@ -152,6 +165,7 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.0",
+    "esbuild": "^0.27.7",
     "vite": "^8.0.3"
   }
 }
@@ -160,6 +174,8 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 ---
 
 ## AŞAMA 1: JUICE & GÖRSEL POLISH
+
+**Durum:** Tamamlandı
 
 **Hedef:** Oyunu "canlı" ve "sulu" hissettirir. Tek bir mekanik değişmez; sadece görsel/hissi geri bildirim eklenir.
 
@@ -171,15 +187,15 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 **Mevcut:** Düz siyah arkaplan (#0a0a12) — cansız, boş.
 
 **Yapılacaklar:**
-- [ ] **Kayan grid çizgileri:** İnce, düşük-alpha neon çizgiler yavaşça yukarı kayar (Geometry Wars tarzı)
+- [x] **Kayan grid çizgileri:** İnce, düşük-alpha neon çizgiler yavaşça yukarı kayar (Geometry Wars tarzı)
   - Dikey ve yatay çizgiler, 60-80px aralık
   - Renk: `rgba(100, 180, 255, 0.06)` gibi çok soluk mavi
   - Hız: ~15-20 px/saniye yukarı kayma
   - Phaser TileSprite veya shader-free Graphics API ile çizilebilir
-- [ ] **Breathing glow:** Arkaplanın koyu mavi ↔ koyu mor arası nefes alırcasına 8-10 saniyelik döngüde geçişi
+- [x] **Breathing glow:** Arkaplanın koyu mavi ↔ koyu mor arası nefes alırcasına 8-10 saniyelik döngüde geçişi
   - Merkezdeki radial gradient'in alpha'sı pulse eder
   - `alpha: 0.03 → 0.08 → 0.03` gibi çok subtle
-- [ ] **Seviyeye göre renk shift:** Level arttıkça arka plan tonu kademeli değişir
+- [x] **Seviyeye göre renk shift:** Level arttıkça arka plan tonu kademeli değişir
   - Level 1-4: Koyu mavi
   - Level 5-9: Koyu mor
   - Level 10-14: Koyu kırmızı-mor
@@ -191,10 +207,10 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 **Mevcut:** Oyuncu hareket ederken hiçbir iz bırakmıyor.
 
 **Yapılacaklar:**
-- [ ] **Afterimage trail:** Hareket sırasında geride soluk ghost üçgenler bırakılır
+- [x] **Afterimage trail:** Hareket sırasında geride soluk ghost üçgenler bırakılır
   - Her 3-4 frame'de bir ghost sprite spawn, alpha 0.3 → 0 (200ms)
   - Hareket hızına göre yoğunluk artabilir
-- [ ] **Kalkan halka efekti:** shieldCharges > 0 iken oyuncu etrafında dönen ince halka
+- [x] **Kalkan halka efekti:** shieldCharges > 0 iken oyuncu etrafında dönen ince halka
   - Halka sayısı = shield charge sayısı
   - Yavaş rotasyon (1 tur / 3 saniye)
   - Renk: `#4488ff` soluk mavi
@@ -204,10 +220,10 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 **Mevcut:** Mermiler düz çizgi olarak gidiyor, isabet anında sadece düşman renk değiştiriyor.
 
 **Yapılacaklar:**
-- [ ] **Muzzle flash:** Ateş anında üçgenin ucunda küçük beyaz/cyan patlama (3-4 partikül, 80ms ömür)
-- [ ] **Bullet trail:** Merminin arkasında ince cyan çizgi (afterimage veya trail particles)
+- [x] **Muzzle flash:** Ateş anında üçgenin ucunda küçük beyaz/cyan patlama (3-4 partikül, 80ms ömür)
+- [x] **Bullet trail:** Merminin arkasında ince cyan çizgi (afterimage veya trail particles)
   - Her 2 frame'de 1 partikül, alpha 0.4 → 0, 150ms ömür
-- [ ] **Impact burst:** İsabet anında küçük yıldız/spark patlaması
+- [x] **Impact burst:** İsabet anında küçük yıldız/spark patlaması
   - Normal hit: 4-5 küçük cyan partikül
   - Crit hit: 8-10 büyük altın partikül + floating "+CRIT" text (500ms yukarı kayarak kaybolur)
 
@@ -216,42 +232,44 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 **Mevcut:** Partiküller var ama yetersiz. Sadece kare/nokta patlama.
 
 **Yapılacaklar:**
-- [ ] **Wireframe genişleme:** Ölüm anında düşmanın outline'ı genişleyerek kaybolur (scale 1 → 2.5, alpha 1 → 0, 200ms)
-- [ ] **Frame freeze:** Her kill'de 30-50ms physics duraklaması (hit-stop / freeze frame effect)
+- [x] **Wireframe genişleme:** Ölüm anında düşmanın outline'ı genişleyerek kaybolur (scale 1 → 2.5, alpha 1 → 0, 200ms)
+- [x] **Frame freeze:** Her kill'de 30-50ms physics duraklaması (hit-stop / freeze frame effect)
   - Sadece hissedilir, oyunu yavaşlatmaz
   - Boss kill'de 150ms freeze + beyaz flash
-- [ ] **Geometrik parça dağılımı:** Ölüm parçalarının küçük üçgen/daire olarak dağılması (mevcut kareye ek)
+- [x] **Geometrik parça dağılımı:** Ölüm parçalarının küçük üçgen/daire olarak dağılması (mevcut kareye ek)
 
 ### 1.5 Damage Popup Numbers
 
 **Mevcut:** Yok. Hasar görünmüyor.
 
 **Yapılacaklar:**
-- [ ] İsabet anında düşman pozisyonunda hasar miktarı görünsün
-- [ ] Normal hit: beyaz "1" (veya hasar miktarı), küçük font, 400ms yukarı kayarak kaybolur
-- [ ] Crit hit: altın büyük font "4!" (hasar×2), scale-in animasyonu, 600ms
-- [ ] Frost hit: mavi "❄ 1" göstergesi
+- [x] İsabet anında düşman pozisyonunda hasar miktarı görünsün
+- [x] Normal hit: beyaz "1" (veya hasar miktarı), küçük font, 400ms yukarı kayarak kaybolur
+- [x] Crit hit: altın büyük font "4!" (hasar×2), scale-in animasyonu, 600ms
+- [x] Frost hit: mavi "❄ 1" göstergesi
 
 ### 1.6 Playfield Çerçeve İyileştirmesi
 
 **Mevcut:** İnce statik çerçeve.
 
 **Yapılacaklar:**
-- [ ] Çerçeve köşelerinde küçük neon accent noktalar (parlayan köşe markerlar)
-- [ ] Level atlandığında çerçevenin kısa bir pulse animasyonu (lineWidth 2 → 4 → 2, 300ms)
+- [x] Çerçeve köşelerinde küçük neon accent noktalar (parlayan köşe markerlar)
+- [x] Level atlandığında çerçevenin kısa bir pulse animasyonu (lineWidth 2 → 4 → 2, 300ms)
 
 ### 1.7 Menu Ekranı Polish
 
 **Mevcut:** Sadece text var, arkaplan boş.
 
 **Yapılacaklar:**
-- [ ] Menü arkasında yavaş dönen büyük geometrik şekil (üçgen veya hexagon wireframe)
-- [ ] Küçük yüzen parçacıklar (ambient particles — yavaş, random yönlü, düşük alpha)
-- [ ] "Tap to Play" text'ine scale pulse eklenmesi (sadece alpha değil, hafif büyüme de)
+- [x] Menü arkasında yavaş dönen büyük geometrik şekil (üçgen veya hexagon wireframe)
+- [x] Küçük yüzen parçacıklar (ambient particles — yavaş, random yönlü, düşük alpha)
+- [x] "Tap to Play" text'ine scale pulse eklenmesi (sadece alpha değil, hafif büyüme de)
 
 ---
 
 ## AŞAMA 2: SES SİSTEMİ
+
+**Durum:** Tamamlandı (v1 — Web Audio procedural ses + adaptif müzik + kill streak notaları)
 
 **Hedef:** Web Audio API ile procedural ses üretimi. Harici ses dosyası kullanılmaz — tamamen kod ile üretilir (0-asset felsefesine uygun).
 
@@ -261,13 +279,13 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 ### 2.1 Ses Motoru Altyapısı
 
 **Yapılacaklar:**
-- [ ] `src/audio/SoundEngine.js` — Web Audio API wrapper sınıfı
+- [x] `src/audio/SoundEngine.js` — Web Audio API wrapper sınıfı
   - AudioContext yönetimi (user gesture ile resume)
   - Master volume kontrolü
   - SFX volume ve Music volume ayrı kanal
   - Mute/unmute desteği
-- [ ] Mobilde ses başlatma: İlk dokunuşta AudioContext.resume()
-- [ ] Ses ayarları localStorage'da saklanmalı
+- [x] Mobilde ses başlatma: İlk dokunuşta AudioContext.resume()
+- [x] Ses ayarları localStorage'da saklanmalı
 
 ### 2.2 Procedural SFX
 
@@ -289,13 +307,13 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 
 ### 2.3 Procedural Müzik (Basit Synth Loop)
 
-- [ ] `src/audio/MusicEngine.js` — Basit arpejatör tabanlı müzik döngüsü
+- [x] `src/audio/MusicEngine.js` — Basit arpejatör tabanlı müzik döngüsü
   - Pentatonik scale (A minor pentatonic: A-C-D-E-G)
   - Tempo: 120-140 BPM
   - Bass: Düşük sine wave, her beat'te kök nota
   - Arpej: Rastgele pentatonik nota seçimi, 8th note pattern
   - Pad: Sürekli çalan düşük-volume chord drone
-- [ ] **Adaptive katmanlar:**
+- [x] **Adaptive katmanlar:**
   - Level 1-4: Sadece ambient pad
   - Level 5-9: + bass line
   - Level 10+: + arpej melody
@@ -304,14 +322,22 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 
 ### 2.4 Kill Streak Melodisi
 
-- [ ] Ardışık kill'lerde her kill farklı nota çalar (pentatonik sırada)
+- [x] Ardışık kill'lerde her kill farklı nota çalar (pentatonik sırada)
   - Kill 1: A4, Kill 2: C5, Kill 3: D5, Kill 4: E5, Kill 5: G5, Kill 6: A5 → tekrar
   - Streak kırılınca nota sıfırlanır
   - Bu, oyuncunun bilinçsiz olarak kill ritmine bağlanmasını sağlar
 
+**Uygulama Notları (v1):**
+- `src/audio/` altında `SoundEngine`, `MusicEngine` ve facade eklendi.
+- Olay tabanlı SFX entegrasyonu `PlayScene` akışına bağlandı (fire/hit/crit/death/boss/shield/level/gameover/draft).
+- Menüden oyuna ilk dokunuşta güvenli `resume` akışı eklendi.
+- Ses ayarları `src/utils/Storage.js` ile localStorage’da saklanıyor.
+
 ---
 
 ## AŞAMA 3: HUD, UI & META-GAME
+
+**Durum:** Tamamlandı
 
 **Hedef:** Oyuncuya ilerleme hissi ver, verileri sakla, profesyonel UI oluştur.
 
@@ -323,14 +349,14 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 **Mevcut:** Sadece "Score: XXX" metni sol üstte.
 
 **Yapılacaklar:**
-- [ ] **Level göstergesi:** Sol üstte "LV.5" gibi seviye numarası
-- [ ] **Kill progress bar:** Level göstergesinin altında ince bar (killsThisLevel / KILLS_PER_LEVEL)
+- [x] **Level göstergesi:** Sol üstte "LV.5" gibi seviye numarası
+- [x] **Kill progress bar:** Level göstergesinin altında ince bar (killsThisLevel / KILLS_PER_LEVEL)
   - Bar dolduğunda flash efekti
   - Renk: seviye rengine uygun
-- [ ] **Shield göstergesi:** Sol altta kalkan simgeleri (dolu/boş)
+- [x] **Shield göstergesi:** Sol altta kalkan simgeleri (dolu/boş)
   - Her shield charge için küçük mavi daire
   - Charge kullanılınca → kırmızı flash + kaybolma
-- [ ] **Combo sayacı:** Ekranın ortasında büyük font (aktif combo sırasında)
+- [x] **Combo sayacı:** Ekranın ortasında büyük font (aktif combo sırasında)
   - "×3" "×5" "×10" gibi büyüyen gösterim
   - Combo bitmeden görünür, bitince fade-out
 
@@ -339,7 +365,7 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 **Mevcut:** Yok. Direkt menüye dönüş.
 
 **Yapılacaklar:**
-- [ ] PlayScene'de game over durumunda overlay ekranı göster:
+- [x] PlayScene'de game over durumunda overlay ekranı göster:
   - "GAME OVER" başlık (büyük, kırmızı pulsing)
   - Final skor (büyük font)
   - Ulaşılan seviye
@@ -347,7 +373,7 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
   - Total kills this run
   - "Tap to Retry" butonu → PlayScene restart
   - "Menu" butonu → Menu sahnesine dön
-- [ ] Game over ekranında run istatistikleri:
+- [x] Game over ekranında run istatistikleri:
   - Süre (ne kadar oynadı)
   - En yüksek combo
   - Seçilen upgrade'ler listesi
@@ -357,8 +383,8 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 **Mevcut:** Hiçbir veri kayıt edilmiyor.
 
 **Yapılacaklar:**
-- [ ] `src/utils/Storage.js` — localStorage wrapper
-- [ ] Kaydedilecek veriler:
+- [x] `src/utils/Storage.js` — localStorage wrapper
+- [x] Kaydedilecek veriler:
   ```javascript
   {
     highScore: number,
@@ -373,47 +399,55 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
     }
   }
   ```
-- [ ] Her run sonunda otomatik kayıt
-- [ ] Menu ekranında high score gösterimi
+- [x] Her run sonunda otomatik kayıt
+- [x] Menu ekranında high score gösterimi
 
 ### 3.4 Pause Sistemi
 
 **Mevcut:** Yok.
 
 **Yapılacaklar:**
-- [ ] Sağ üst köşede pause butonu (iki dikey bar ikonu, Graphics API ile)
-- [ ] Pause overlay:
+- [x] Sağ üst köşede pause butonu (iki dikey bar ikonu, Graphics API ile)
+- [x] Pause overlay:
   - "PAUSED" başlık
   - "Resume" butonu
   - "Restart" butonu
   - "Menu" butonu
   - Ses ayarları (SFX/Music volume slider'ları)
-- [ ] Pause sırasında physics, fire timer, spawn timer, upgrade timer duraklatılır
-- [ ] Upgrade modal açıkken pause butonu gizlenir
+- [x] Pause sırasında physics, fire timer, spawn timer, upgrade timer duraklatılır
+- [x] Upgrade modal açıkken pause butonu gizlenir
 
 ### 3.5 Upgrade Modal İyileştirmesi
 
 **Mevcut:** Çalışıyor ama polish eksik.
 
 **Yapılacaklar:**
-- [ ] Kart seçildiğinde flip/glow animasyonu
-- [ ] Her rarity'nin farklı parlama efekti: Common → yeşil glow, Rare → mavi glow, Epic → mor glow
-- [ ] Kartların hover'ında scale-up + glow intensify
-- [ ] Modal açılırken kartlar aşağıdan yukarı slide-in animasyonu ile gelsin
-- [ ] Seçim sonrası kısa "upgrade acquired" text feedback (oyun alanı üstünde 1 saniyelik floating text)
-- [ ] **Dil birliği:** Banish açıklamasını İngilizce yap veya tüm UI'ı Türkçe'ye çevir (kullanıcı tercihine göre)
+- [x] Kart seçildiğinde flip/glow animasyonu
+- [x] Her rarity'nin farklı parlama efekti: Common → yeşil glow, Rare → mavi glow, Epic → mor glow
+- [x] Kartların hover'ında scale-up + glow intensify
+- [x] Modal açılırken kartlar aşağıdan yukarı slide-in animasyonu ile gelsin
+- [x] Seçim sonrası kısa "upgrade acquired" text feedback (oyun alanı üstünde 1 saniyelik floating text)
+- [x] **Dil birliği:** Banish açıklamasını İngilizce yap veya tüm UI'ı Türkçe'ye çevir (kullanıcı tercihine göre)
 
 ### 3.6 Onboarding (İlk Oyun)
 
 **Mevcut:** Yok.
 
 **Yapılacaklar:**
-- [ ] İlk oyunda (gamesPlayed === 0) kısa overlay talimatlar:
+- [x] İlk oyunda (gamesPlayed === 0) kısa overlay talimatlar:
   - Frame 1: "Hareket ettirmek için sürükle" + animasyonlu ok
   - Frame 2: "Otomatik ateş eder" + mermi animasyonu
   - Frame 3: "Düşmanlardan kaç!" + düşman görseli
-- [ ] 3 frame, her biri 2 saniye veya dokunuşla geçiş
-- [ ] Sadece ilk oyunda gösterilir (localStorage flag)
+- [x] 3 frame, her biri 2 saniye veya dokunuşla geçiş
+- [x] Sadece ilk oyunda gösterilir (localStorage flag)
+
+**Uygulama Notları (v1):**
+- `PlayScene` içinde level/progress/shield/combo HUD, game-over overlay ve run istatistikleri eklendi.
+- `Storage` katmanı audio + game profile (`highScore`, `bestLevel`, `totalGamesPlayed`, `totalKills`, `totalPlayTimeMs`) ile genişletildi.
+- `settings` tarafında `sfxVolume`, `musicVolume`, `hapticEnabled` kalıcılığı desteklendi.
+- Menu ekranına persistence metrikleri (`Best`, `Games`) yansıtıldı.
+- Upgrade modal için rarity glow, hover scale, slide-in ve selection feedback eklendi.
+- İlk oyun için 3 adımlı onboarding overlay akışı eklendi.
 
 ---
 

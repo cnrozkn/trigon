@@ -1,3 +1,5 @@
+import { createAudioFacade } from './audio/index.js';
+
 function showBootError(error) {
   const root = document.getElementById('game-container') || document.body;
   const box = document.createElement('pre');
@@ -62,9 +64,18 @@ async function startGame() {
     };
 
     const game = new Phaser.Game(config);
+    const audio = createAudioFacade();
+    game.registry.set('audio', audio);
     const refresh = () => game.scale.refresh();
     window.addEventListener('resize', refresh);
     window.addEventListener('orientationchange', refresh);
+    window.addEventListener(
+      'beforeunload',
+      () => {
+        audio.destroy();
+      },
+      { once: true },
+    );
     refresh();
   } catch (error) {
     console.error(error);

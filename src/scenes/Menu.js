@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { loadGameProfile } from '../utils/Storage.js';
 
 export default class Menu extends Phaser.Scene {
   constructor() {
@@ -12,6 +13,7 @@ export default class Menu extends Phaser.Scene {
     this.titleText.setPosition(width / 2, height * 0.28);
     this.subText.setPosition(width / 2, height * 0.42);
     this.hintText.setPosition(width / 2, height * 0.62);
+    if (this.metaText) this.metaText.setPosition(width / 2, height * 0.5);
   }
 
   createBackdrop(width, height) {
@@ -47,6 +49,9 @@ export default class Menu extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     this.createBackdrop(width, height);
+    this.audio = this.registry.get('audio') || null;
+    this.audio?.setSceneState({ level: 1, isBoss: false, inUpgrade: false });
+    const profile = loadGameProfile();
 
     this.titleText = this.add
       .text(width / 2, height * 0.28, 'TRIGON', {
@@ -74,6 +79,18 @@ export default class Menu extends Phaser.Scene {
         color: '#ffffff',
       })
       .setOrigin(0.5);
+    this.metaText = this.add
+      .text(
+        width / 2,
+        height * 0.5,
+        `Best: ${profile.highScore}   Games: ${profile.totalGamesPlayed}`,
+        {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '14px',
+          color: '#c7d8ef',
+        },
+      )
+      .setOrigin(0.5);
 
     this.tweens.add({
       targets: this.hintText,
@@ -100,7 +117,11 @@ export default class Menu extends Phaser.Scene {
       if (this.bgGlow) this.bgGlow.destroy();
     });
 
-    this.input.once('pointerdown', () => {
+    this.input.once('pointerdown', async () => {
+      if (this.audio) {
+        await this.audio.resume();
+        this.audio.playUpgradeSelect();
+      }
       this.scene.start('PlayScene');
     });
   }
