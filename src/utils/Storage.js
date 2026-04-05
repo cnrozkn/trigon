@@ -14,6 +14,25 @@ const DEFAULT_GAME_PROFILE = {
   totalGamesPlayed: 0,
   totalKills: 0,
   totalPlayTimeMs: 0,
+  coins: 0,
+  upgrades: {
+    baseDamage: 0,
+    baseSpeed: 0,
+    extraReroll: 0,
+    baseShield: 0,
+    coinMultiplier: 0,
+    nearMissRange: 0,
+  },
+  cosmetics: {
+    playerColor: 'default',
+    bulletTrail: 'default',
+    deathParticles: 'default',
+  },
+  achievements: [],
+  dailyChallenges: {
+    lastPlayedDate: '',
+    bestScore: 0,
+  },
 };
 
 function clamp01(value, fallback) {
@@ -86,6 +105,11 @@ export function loadGameProfile() {
     totalGamesPlayed: safeNonNegativeInt(parsed.totalGamesPlayed, DEFAULT_GAME_PROFILE.totalGamesPlayed),
     totalKills: safeNonNegativeInt(parsed.totalKills, DEFAULT_GAME_PROFILE.totalKills),
     totalPlayTimeMs: safeNonNegativeInt(parsed.totalPlayTimeMs, DEFAULT_GAME_PROFILE.totalPlayTimeMs),
+    coins: safeNonNegativeInt(parsed.coins, DEFAULT_GAME_PROFILE.coins),
+    upgrades: { ...DEFAULT_GAME_PROFILE.upgrades, ...(parsed.upgrades || {}) },
+    cosmetics: { ...DEFAULT_GAME_PROFILE.cosmetics, ...(parsed.cosmetics || {}) },
+    achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
+    dailyChallenges: { ...DEFAULT_GAME_PROFILE.dailyChallenges, ...(parsed.dailyChallenges || {}) },
   };
 }
 
@@ -96,6 +120,11 @@ export function saveGameProfile(profile) {
     totalGamesPlayed: safeNonNegativeInt(profile.totalGamesPlayed, DEFAULT_GAME_PROFILE.totalGamesPlayed),
     totalKills: safeNonNegativeInt(profile.totalKills, DEFAULT_GAME_PROFILE.totalKills),
     totalPlayTimeMs: safeNonNegativeInt(profile.totalPlayTimeMs, DEFAULT_GAME_PROFILE.totalPlayTimeMs),
+    coins: safeNonNegativeInt(profile.coins, DEFAULT_GAME_PROFILE.coins),
+    upgrades: { ...DEFAULT_GAME_PROFILE.upgrades, ...(profile.upgrades || {}) },
+    cosmetics: { ...DEFAULT_GAME_PROFILE.cosmetics, ...(profile.cosmetics || {}) },
+    achievements: Array.isArray(profile.achievements) ? profile.achievements : [],
+    dailyChallenges: { ...DEFAULT_GAME_PROFILE.dailyChallenges, ...(profile.dailyChallenges || {}) },
   };
   safeWriteJson(GAME_PROFILE_KEY, safe);
 }

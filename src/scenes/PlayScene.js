@@ -118,13 +118,21 @@ export default class PlayScene extends Phaser.Scene {
     this.powerupSystem = null;
 
     // Roguelite build state
-    this.fireRateLevel = 0;
-    this.damageLevel = 0;
-    this.shieldCharges = 0;
+    const u = this.profile?.upgrades || {};
+    this.fireRateLevel = u.baseSpeed || 0;
+    this.damageLevel = u.baseDamage || 0;
+    this.shieldCharges = u.baseShield || 0;
+    this.nearMissOffset = (u.nearMissRange || 0) * 10;
+    this.coinBoost = u.coinMultiplier || 0;
+    this.extraRerolls = u.extraReroll || 0;
+    this.difficultyOffset = Object.values(u).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
+
     this.pierceLevel = 0;
     this.multishotLevel = 0;
     this.critLevel = 0;
     this.frostLevel = 0;
+
+    this.coinsCollected = 0;
 
     this.upgradeModal = null;
     this.overlayBg = null;
@@ -814,7 +822,8 @@ export default class PlayScene extends Phaser.Scene {
     const players = this.players?.getChildren?.().filter((p) => p?.active) || [];
     if (players.length === 0) return;
     const now = this.time.now;
-    const radiusSq = NEAR_MISS_RADIUS_PX * NEAR_MISS_RADIUS_PX;
+    const actualRadius = NEAR_MISS_RADIUS_PX + (this.nearMissOffset || 0);
+    const radiusSq = actualRadius * actualRadius;
 
     this.enemies.children.iterate((enemy) => {
       if (!enemy || !enemy.active) return true;
@@ -941,6 +950,7 @@ export default class PlayScene extends Phaser.Scene {
 
   startFeverMode() {
     this.feverActive = true;
+    this.addCoins(50);
     this.feverEndsAt = this.time.now + FEVER_DURATION_MS;
     this.feverCooldownUntil = this.feverEndsAt + FEVER_COOLDOWN_MS;
     this.showFloatingText('FEVER!', this.scale.width * 0.5, this.scale.height * 0.38, {
@@ -1002,18 +1012,27 @@ export default class PlayScene extends Phaser.Scene {
       maxCombo: this.maxCombo,
       runDurationMs,
       selectedUpgrades: [...this.selectedUpgrades],
+      coinsCollected: this.coinsCollected,
     };
+  }
+
+  addCoins(amount) {
+    const mult = 1 + this.coinBoost * 0.25;
+    const finalAmount = Math.floor(amount * mult);
+    this.coinsCollected += finalAmount;
   }
 
   persistRunStats() {
     const run = this.getRunStats();
     const prev = loadGameProfile();
     const next = {
+      ...prev,
       highScore: Math.max(prev.highScore, run.score),
       bestLevel: Math.max(prev.bestLevel, run.level),
       totalGamesPlayed: prev.totalGamesPlayed + 1,
       totalKills: prev.totalKills + run.runKills,
       totalPlayTimeMs: prev.totalPlayTimeMs + run.runDurationMs,
+      coins: Math.floor((prev.coins || 0) + run.coinsCollected),
     };
     this.profile = next;
     saveGameProfile(next);
@@ -1148,10 +1167,10 @@ export default class PlayScene extends Phaser.Scene {
       };
 
       bg.on('pointerdown', (pointer) => update(pointer.worldX));
-      knob.setInteractive({ useHandCursor: true });
-      knob.on('pointerdown', (pointer) => update(pointer.worldX));
-      bg.on('pointermove', (pointer) => {
-        if (pointer.isDown) update(pointer.worldX);
+      
+      knob.setInteractive({ useHandCursor: true, draggable: true });
+      knob.on('drag', (pointer, dragX) => {
+        update(pointer.worldX);
       });
 
       return [title, bg, fill, knob, pct];
@@ -1310,6 +1329,7 @@ export default class PlayScene extends Phaser.Scene {
       `Time: ${this.formatDuration(run.runDurationMs)}`,
       `Max Combo: x${run.maxCombo}`,
       `Upgrades: ${upgrades}`,
+      `Earned: ${run.coinsCollected} coins`,
     ];
 
     const stats = this.add
@@ -1529,6 +1549,30 @@ export default class PlayScene extends Phaser.Scene {
 
   spawnFromWave(spawn) {
     const config = buildEnemyConfig(spawn.type, this.currentLevel);
+    
+    // Base difficulty from Shop Upgrades
+    let diffMult = 1;
+    let spdMult = 1;
+
+    if (this.difficultyOffset > 0) {
+      diffMult += (this.difficultyOffset * 0.04);
+      spdMult += (this.difficultyOffset * 0.012);
+    }
+
+    // Aggressive scaling after Level 10
+    if (this.currentLevel > 10) {
+      const extraLevels = this.currentLevel - 10;
+      // +20% HP and +15% Speed per level after 10 (Multiplicative)
+      const escalationHp = Math.pow(1.22, extraLevels);
+      const escalationSpd = Math.pow(1.15, extraLevels);
+      diffMult *= escalationHp;
+      spdMult *= escalationSpd;
+    }
+
+    config.hp = Math.max(1, Math.floor(config.hp * diffMult));
+    if (config.baseVy) config.baseVy = Math.floor(config.baseVy * spdMult);
+    if (config.baseVx) config.baseVx = Math.floor(config.baseVx * spdMult);
+    if (config.shieldHp) config.shieldHp = Math.floor(config.shieldHp * diffMult);
     const x = spawn.x ?? Phaser.Math.Between(this.playLeft + 24, this.playRight - 24);
     const y = spawn.y ?? Math.min(this.scale.height * 0.32, 108);
     const sprite = this.enemies.create(x, y, config.texture);
@@ -1625,6 +1669,7 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   onWaveCleared(ctx) {
+    this.addCoins(10);
     this.score += 100;
     this.showFloatingText('WAVE CLEAR +100', this.scale.width * 0.5, 110, {
       color: '#99f1ff',
@@ -1639,6 +1684,7 @@ export default class PlayScene extends Phaser.Scene {
   onLevelCleared() {
     if (this.levelClearPending || this.gameOver) return;
     this.levelClearPending = true;
+    this.addCoins(15);
     this.showFloatingText('LEVEL CLEAR!', this.scale.width * 0.5, this.scale.height * 0.35, {
       color: '#ffffff',
       size: 34,
@@ -2027,6 +2073,7 @@ export default class PlayScene extends Phaser.Scene {
     this.recycleEnemy(enemy);
 
     const gained = this.addScaledScore(isBoss ? 250 : 10);
+    this.addCoins(isBoss ? 25 : 1);
     this.runKills += 1;
     if (!isBoss && type !== 'splitterMini') this.powerupSystem?.maybeDropAt(x, y);
     if (this.getScoreMultiplier() > 1) {
@@ -2043,7 +2090,7 @@ export default class PlayScene extends Phaser.Scene {
     if (this.gameOver || this.isChoosingUpgrade || this.onboardingActive || this.isPausedByUser) return;
 
     this.draftBanishedKeys = new Set();
-    this.draftRerollsLeft = DRAFT_REROLLS;
+    this.draftRerollsLeft = DRAFT_REROLLS + this.extraRerolls;
     this.draftChoices = this.pickUpgradeChoices(3, this.draftBanishedKeys, new Set());
     this.fillDraftSlotsToThree();
     if (this.draftChoices.length === 0) {
