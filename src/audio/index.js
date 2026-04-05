@@ -44,6 +44,9 @@ export function createAudioFacade() {
     stopMusic() {
       music.stop();
     },
+    stopAllSfx() {
+      sound.stopAllSfx();
+    },
     startMusic() {
       music.start();
     },

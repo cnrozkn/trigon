@@ -1473,7 +1473,6 @@ export default class PlayScene extends Phaser.Scene {
     this.deathBurst.explode(isBoss ? 36 : 18, x, y);
     if (this.geoBurst) this.geoBurst.explode(isBoss ? 20 : 9, x, y);
     this.emitEnemyWireframe(enemy, isBoss);
-    this.applyHitStop(isBoss ? 150 : 40, isBoss);
 
     this.recycleEnemy(enemy);
 
@@ -1794,6 +1793,7 @@ export default class PlayScene extends Phaser.Scene {
   triggerGameOver(playerSprite) {
     this.gameOver = true;
     this.killStreak = 0;
+    this.audio?.stopAllSfx?.();
     this.audio?.playGameOver();
     this.audio?.stopMusic();
     if (this.shieldRingG) this.shieldRingG.clear();

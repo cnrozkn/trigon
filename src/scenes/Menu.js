@@ -10,6 +10,7 @@ export default class Menu extends Phaser.Scene {
     if (!this.titleText || !this.subText || !this.hintText) return;
     if (this.bgShape) this.bgShape.setPosition(width / 2, height * 0.52);
     if (this.bgGlow) this.bgGlow.setPosition(width / 2, height * 0.52).setSize(width * 0.92, width * 0.92);
+    if (this.tapStartZone) this.tapStartZone.setPosition(width / 2, height / 2).setSize(width, height);
     this.titleText.setPosition(width / 2, height * 0.28);
     this.subText.setPosition(width / 2, height * 0.42);
     this.hintText.setPosition(width / 2, height * 0.62);
@@ -49,6 +50,7 @@ export default class Menu extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     this.createBackdrop(width, height);
+    this.hasStarted = false;
     this.audio = this.registry.get('audio') || null;
     this.audio?.setSceneState({ level: 1, isBoss: false, inUpgrade: false });
     const profile = loadGameProfile();
@@ -78,7 +80,18 @@ export default class Menu extends Phaser.Scene {
         fontSize: '28px',
         color: '#ffffff',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    this.tapStartZone = this.add.zone(width / 2, height / 2, width, height).setOrigin(0.5).setDepth(50).setInteractive();
+    this.tapStartZone.on('pointerdown', (_pointer, _lx, _ly, evt) => {
+      if (evt?.stopPropagation) evt.stopPropagation();
+      void this.startGameFromMenu();
+    });
+    this.hintText.on('pointerdown', (_pointer, _lx, _ly, evt) => {
+      if (evt?.stopPropagation) evt.stopPropagation();
+      void this.startGameFromMenu();
+    });
     this.metaText = this.add
       .text(
         width / 2,
@@ -115,15 +128,31 @@ export default class Menu extends Phaser.Scene {
       if (this.ambient) this.ambient.destroy();
       if (this.bgShape) this.bgShape.destroy();
       if (this.bgGlow) this.bgGlow.destroy();
+      if (this.tapStartZone) this.tapStartZone.destroy();
     });
 
-    this.input.once('pointerdown', async () => {
-      if (this.audio) {
-        await this.audio.resume();
-        this.audio.playUpgradeSelect();
-      }
-      this.scene.start('PlayScene');
+    this.onGlobalPointerDown = () => void this.startGameFromMenu();
+    this.input.on('pointerdown', this.onGlobalPointerDown);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('pointerdown', this.onGlobalPointerDown);
     });
+  }
+
+  async startGameFromMenu() {
+    if (this.hasStarted) return;
+    this.hasStarted = true;
+    if (this.tapStartZone) this.tapStartZone.disableInteractive();
+    if (this.hintText) this.hintText.disableInteractive();
+
+    if (this.audio) {
+      // Never block scene transition on mobile audio unlock timing.
+      void this.audio.resume()
+        .then(() => {
+          this.audio?.playUpgradeSelect();
+        })
+        .catch(() => {});
+    }
+    if (this.scene.isActive('Menu')) this.scene.start('PlayScene');
   }
 
   update(_time, delta) {

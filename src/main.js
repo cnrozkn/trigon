@@ -31,15 +31,10 @@ async function startGame() {
       const vv = window.visualViewport;
       const h = Math.round(vv ? vv.height : window.innerHeight);
       document.documentElement.style.setProperty('--app-height', `${h}px`);
+      return h;
     };
 
     syncViewportHeight();
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', syncViewportHeight);
-      window.visualViewport.addEventListener('scroll', syncViewportHeight);
-    }
-    window.addEventListener('resize', syncViewportHeight);
-    window.addEventListener('orientationchange', syncViewportHeight);
 
     const config = {
       type: Phaser.AUTO,
@@ -66,17 +61,41 @@ async function startGame() {
     const game = new Phaser.Game(config);
     const audio = createAudioFacade();
     game.registry.set('audio', audio);
-    const refresh = () => game.scale.refresh();
-    window.addEventListener('resize', refresh);
-    window.addEventListener('orientationchange', refresh);
+    const syncGameViewport = () => {
+      const vv = window.visualViewport;
+      const w = Math.round(vv ? vv.width : window.innerWidth);
+      const h = syncViewportHeight();
+      game.scale.resize(w, h);
+      game.scale.refresh();
+    };
+    let viewportSyncId = 0;
+    const queueViewportSync = () => {
+      if (viewportSyncId) return;
+      viewportSyncId = requestAnimationFrame(() => {
+        viewportSyncId = 0;
+        syncGameViewport();
+      });
+    };
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', queueViewportSync);
+      window.visualViewport.addEventListener('scroll', queueViewportSync);
+    }
+    window.addEventListener('resize', queueViewportSync);
+    window.addEventListener('orientationchange', queueViewportSync);
     window.addEventListener(
       'beforeunload',
       () => {
+        if (window.visualViewport) {
+          window.visualViewport.removeEventListener('resize', queueViewportSync);
+          window.visualViewport.removeEventListener('scroll', queueViewportSync);
+        }
+        window.removeEventListener('resize', queueViewportSync);
+        window.removeEventListener('orientationchange', queueViewportSync);
         audio.destroy();
       },
       { once: true },
     );
-    refresh();
+    syncGameViewport();
   } catch (error) {
     console.error(error);
     showBootError(error);

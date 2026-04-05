@@ -18,6 +18,7 @@ export default class SoundEngine {
     this.musicGain = null;
     this.musicDuckGain = null;
     this.noiseBuffer = null;
+    this.activeSfxSources = new Set();
   }
 
   ensureContext() {
@@ -160,6 +161,7 @@ export default class SoundEngine {
     amp.connect(out);
 
     osc.start(now);
+    if (destination === 'sfx') this.trackSfxSource(osc);
     osc.stop(stopAt);
   }
 
@@ -193,7 +195,28 @@ export default class SoundEngine {
     amp.connect(out);
 
     src.start(now);
+    if (destination === 'sfx') this.trackSfxSource(src);
     src.stop(now + total + 0.01);
+  }
+
+  trackSfxSource(sourceNode) {
+    this.activeSfxSources.add(sourceNode);
+    const prevEnded = sourceNode.onended;
+    sourceNode.onended = (...args) => {
+      this.activeSfxSources.delete(sourceNode);
+      if (typeof prevEnded === 'function') prevEnded.apply(sourceNode, args);
+    };
+  }
+
+  stopAllSfx() {
+    this.activeSfxSources.forEach((source) => {
+      try {
+        source.stop();
+      } catch (_err) {
+        // source may already be stopped
+      }
+    });
+    this.activeSfxSources.clear();
   }
 
   // ----- SFX events -----
