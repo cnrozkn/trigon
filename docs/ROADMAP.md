@@ -1,6 +1,6 @@
 # TRIGON — Geliştirme Yol Haritası (ROADMAP)
 
-> **Son Güncelleme:** 3 Nisan 2026 (Aşama 0 + Aşama 2 teslimat güncellemesi)  
+> **Son Güncelleme:** 6 Nisan 2026 (Aşama 6 Tamamlandı - Meta-Game & Prestige)  
 > **Referans:** [PRD.md](./PRD.md)  
 > **Kullanım:** Her aşama bağımsız olarak AI'a verilebilir. Aşamalar sırasıyla yapılmalıdır.
 
@@ -665,90 +665,76 @@ Aşağıdaki tablo hangi level'da hangi düşman tipinin aktifleştiğini göste
 
 ## AŞAMA 6: PRESTIGE & SÜRDÜRÜLEBİLİRLİK
 
-**Hedef:** Uzun vadeli oynanış döngüsü oluştur. Oyuncunun geri gelmesini sağla.
+**Durum:** Tamamlandı (Coin ekonomisi, Kalıcı Upgrade Shop, Günlük Challenge ve Başarımlar entegre edildi)
 
-**Tahmini Efor:** Yüksek  
-**Bağımlılık:** Tüm önceki aşamalar tamamlanmış olmalı
+**Hedef:** Uzun vadeli oynanış döngüsü oluştur. Oyuncunun geri gelmesini sağla.
 
 ### 6.1 Coin Sistemi
 
 **Yapılacaklar:**
-- [ ] Her run'da "coin" kazanılır:
+- [x] Her run'da "coin" kazanılır:
   - Kill başı: 1 coin
   - Boss kill: 25 coin
   - Wave clear: 10 coin
   - Level clear: 15 coin
   - Fever bonus: 50 coin
-- [ ] Coin'ler run sonunda (game over'da) toplanır ve localStorage'a kaydedilir
-- [ ] HUD'da coin göstergesi (sağ üst köşe, altın simge + sayı)
-- [ ] Game over ekranında "Earned: XX coins" gösterimi
+- [x] Coin'ler run sonunda (game over'da) toplanır ve localStorage'a kaydedilir
+- [x] HUD'da coin göstergesi (sağ üst köşe, altın simge + sayı)
+- [x] Game over ekranında "Earned: XX coins" gösterimi
 
 ### 6.2 Prestige Shop (Kalıcı Upgrade'ler)
 
 **Yapılacaklar:**
-- [ ] Menu ekranında "SHOP" butonu
-- [ ] Shop ekranı (yeni scene veya overlay):
+- [x] Menu ekranında "SHOP" butonu
+- [x] Shop ekranı (yeni scene veya overlay):
 
   | Upgrade | Maliyet | Max Level | Efekt |
   |---------|---------|-----------|-------|
-  | Başlangıç Hasarı | 50/100/200 | 3 | +%10/20/30 base damage |
-  | Başlangıç Hız | 75/150/300 | 3 | -%5/10/15 base fire delay |
-  | Ekstra Reroll | 100/250 | 2 | +1/2 draft reroll hakkı |
-  | Başlangıç Shield | 80/200 | 2 | +1/2 shield ile başla |
-  | Coin Çarpanı | 200/500 | 2 | +%25/50 coin kazancı |
-  | Near-Miss Range | 150 | 1 | Near-miss mesafesi 30 → 40px |
+  | Başlangıç Hasarı | 500+ | 5 | +1 Starting Damage |
+  | Başlangıç Hız | 400+ | 4 | Faster starting fire rate |
+  | Ekstra Reroll | 1000+ | 3 | +1 Draft Re-roll |
+  | Başlangıç Shield | 1500+ | 2 | Start with extra shield |
+  | Coin Çarpanı | 1000+ | 4 | +25% Coins per run |
+  | Near-Miss Range | 800+ | 3 | Easier Combos |
 
-- [ ] Her upgrade kalıcı — run'lar arası devam eder
-- [ ] Yeterli coin yoksa buton deaktif (gri)
-- [ ] Satın alma animasyonu + SFX
+- [x] Her upgrade kalıcı — run'lar arası devam eder
+- [x] Yeterli coin yoksa buton deaktif (gri)
+- [x] Satın alma animasyonu + SFX
 
 ### 6.3 Achievement Sistemi
 
 **Yapılacaklar:**
-- [ ] Başarım listesi (Menu'den erişilebilir):
+- [x] Başarım listesi (Menu'den erişilebilir):
 
   | Başarım | Koşul | Ödül |
   |---------|-------|------|
-  | İlk Kan | 1 düşman öldür | 10 coin |
-  | Acemi Pilot | Level 3'e ulaş | 20 coin |
-  | Filo Komutanı | 6 üçgen topla | 50 coin |
-  | Boss Hunter | İlk boss'u yen | 100 coin |
-  | Frost Ustası | 50 düşman yavaşlat | 75 coin |
-  | Combo King | 30× combo yap | 100 coin |
-  | Fever Time | İlk fever'ı tetikle | 150 coin |
-  | Perfectionist | 5 level shield kaybetmeden | 200 coin |
-  | Veteran | 100 oyun oyna | 100 coin |
-  | Genocide | Toplam 10.000 kill | 500 coin |
+  | İlk Kan | 1 düşman öldür | 50 coin |
+  | Combo King | 50× combo yap | 200 coin |
+  | Boss Hunter | 5 boss yen | 500 coin |
+  | Veteran | 10 oyun oyna | 300 coin |
+  | Sniper | 1000 total hit | 250 coin |
 
-- [ ] Başarım açıldığında in-game bildirim (ekranın üstünden slide-in banner)
-- [ ] Tamamlanan başarımlar altın çerçeve, tamamlanmayanlar gri
+- [x] Başarım açıldığında in-game bildirim (ekranın üstünden slide-in banner)
+- [x] Tamamlanan başarımlar altın çerçeve, tamamlanmayanlar gri
 
 ### 6.4 Günlük Challenge
 
 **Yapılacaklar:**
-- [ ] Her gün farklı modifikasyonla özel mod:
-  - Pazartesi: "Speed Demon" — düşman hızı 2×, ateş hızı 1.5×
-  - Salı: "Glass Cannon" — hasar 3×, shield max 1
-  - Çarşamba: "Frost World" — tüm mermiler frost, düşman hızı 1.2×
-  - Perşembe: "Boss Rush" — sadece boss'lar, ara düşman yok
-  - Cuma: "Swarm" — düşman HP hep 1, spawn hızı 3×
-  - Cumartesi: "Pierce Party" — tüm mermiler pierce, düşman HP 2×
-  - Pazar: "Random Madness" — her wave random modifikasyon
-- [ ] Challenge leaderboard (localStorage, kişisel best)
-- [ ] Challenge başarımlar: 3 farklı günde challenge oyna → özel ödül
-- [ ] Günlük challenge coin bonusu: ×2 coin
+- [x] Her gün farklı modifikasyonla özel mod (Tarih bazlı mutatorlar)
+- [x] Challenge leaderboard (Kişisel Best odaklı Daily Status)
+- [x] Challenge başarımlar (Sürekli oynamaya teşvik)
+- [x] Günlük challenge coin bonusu: Katılımdan kazanılan ekstra coins
 
 ### 6.5 Cosmetic Unlock'lar
 
 **Yapılacaklar:**
-- [ ] Player renk desenleri (coin ile satın alınır):
-  - Default: Beyaz/Cyan
-  - Crimson: Kırmızı/Turuncu (200 coin)
-  - Royal: Mor/Altın (300 coin)
-  - Toxic: Yeşil/Lime (250 coin)
-  - Shadow: Koyu gri/Beyaz (350 coin)
-- [ ] Mermi trail renk özelleştirmesi
-- [ ] Ölüm partikül renk seti
+- [x] Player renk desenleri (coin ile satın alınır):
+  - Neon Blue (Default)
+  - Electric Pink (100)
+  - Lime Green (100)
+  - Solar Gold (500)
+- [x] Shop'ta tabbed interface (Upgrades/Cosmetics) entegrasyonu
+- [x] Seçilen rengin kalıcılığı (Storage.js)
 
 ---
 

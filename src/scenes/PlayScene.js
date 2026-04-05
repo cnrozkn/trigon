@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
-import { loadGameProfile, saveGameProfile } from '../utils/Storage.js';
+import { checkNewAchievements } from '../systems/AchievementSystem.js';
+import { loadGameProfile, saveGameProfile, saveAudioSettings } from '../utils/Storage.js';
 import WaveManager from '../systems/WaveManager.js';
 import PowerupSystem from '../systems/PowerupSystem.js';
 import { buildEnemyConfig } from '../systems/EnemyFactory.js';
@@ -64,7 +65,16 @@ const ENDLESS_UPGRADE_DEFS = [
   { key: 'endlessCloseCall', label: 'Close Call Engine', desc: 'Near-miss rewards improve', rarity: 'Epic', weight: 2, color: 0xff99cc, repeatable: true },
 ];
 
-function playerTintForLevel(level) {
+const COSMETIC_COLORS = {
+  pink: 0xff66cc,
+  lime: 0x66ff66,
+  gold: 0xffd700,
+};
+
+function playerTintForLevel(level, cosmeticId) {
+  if (cosmeticId && cosmeticId !== 'default' && COSMETIC_COLORS[cosmeticId]) {
+    return COSMETIC_COLORS[cosmeticId];
+  }
   if (level < 5) return 0xffffff;
   if (level < 10) return 0x00ff88;
   if (level < 15) return 0x00ffff;
@@ -102,7 +112,13 @@ export default class PlayScene extends Phaser.Scene {
     super({ key: 'PlayScene' });
   }
 
-  init() {
+  init(data) {
+    this.challenge = data?.challenge || null;
+    this.mutators = this.challenge?.mutators || {};
+
+    const profile = loadGameProfile();
+    this.profile = profile;
+
     this.score = 0;
     this.currentLevel = 1;
     this.levelClearPending = false;
@@ -121,7 +137,7 @@ export default class PlayScene extends Phaser.Scene {
     const u = this.profile?.upgrades || {};
     this.fireRateLevel = u.baseSpeed || 0;
     this.damageLevel = u.baseDamage || 0;
-    this.shieldCharges = u.baseShield || 0;
+    this.shieldCharges = this.mutators.noShields ? 0 : (u.baseShield || 0);
     this.nearMissOffset = (u.nearMissRange || 0) * 10;
     this.coinBoost = u.coinMultiplier || 0;
     this.extraRerolls = u.extraReroll || 0;
@@ -172,9 +188,12 @@ export default class PlayScene extends Phaser.Scene {
 
     this.audio = null;
     this.killStreak = 0;
-    this.lastKillAt = 0;
+    this.runKills = 0;
     this.maxCombo = 0;
-    this.comboTier = 0;
+    this.feverActivated = false;
+    this.perfectLevels = 0;
+    this.tookDamageInLevel = false;
+    this.coinsCollected = 0;
     this.comboScoreMultiplier = 1;
     this.nearMissStreak = 0;
     this.nearMissLastAt = 0;
@@ -611,12 +630,14 @@ export default class PlayScene extends Phaser.Scene {
         }
       } else {
         const baseVy = e.getData('baseVy') || 45;
-        const vy = baseVy * slowFactor * regularEnemySpeedMultiplier(this.currentLevel);
+        const slowMult = slowFactor * (this.mutators.globalSpeed || 1);
+        const vy = baseVy * slowMult * regularEnemySpeedMultiplier(this.currentLevel);
+
         if (enemyType === 'zigzag') {
           const t = this.time.now * 0.001;
           const amp = e.getData('zigzagAmp') || 100;
           const freq = e.getData('zigzagFreq') || 4.4;
-          e.setVelocityX(Math.sin((e.getData('zigzagSeed') || 0) + t * freq) * amp * slowFactor);
+          e.setVelocityX(Math.sin((e.getData('zigzagSeed') || 0) + t * freq) * amp * slowMult);
           e.setVelocityY(vy);
         } else if (enemyType === 'shooter') {
           const stopY = e.getData('stopY') || 180;
@@ -628,13 +649,13 @@ export default class PlayScene extends Phaser.Scene {
             if (this.time.now >= nextShootAt) {
               this.spawnEnemyBulletAtPlayer(e.x, e.y + 18);
               const baseShootMs = e.getData('shootEveryMs') || 2000;
-              const cadenceScale = 1 + Math.max(0, this.currentLevel - 2) * 0.035;
-              const shootDelay = Math.max(900, Math.round(baseShootMs / cadenceScale));
+              const cadenceScale = (1 + Math.max(0, this.currentLevel - 2) * 0.035) * (this.mutators.enemyFireRate || 1);
+              const shootDelay = Math.max(800, Math.round(baseShootMs / cadenceScale));
               e.setData('nextShootAt', this.time.now + shootDelay);
             }
           }
         } else {
-          e.setVelocityX(e.body.velocity.x);
+          e.setVelocityX((e.getData('baseVx') || 0) * slowMult);
           e.setVelocityY(vy);
         }
       }
@@ -952,6 +973,7 @@ export default class PlayScene extends Phaser.Scene {
     this.feverActive = true;
     this.addCoins(50);
     this.feverEndsAt = this.time.now + FEVER_DURATION_MS;
+    this.feverActivated = true;
     this.feverCooldownUntil = this.feverEndsAt + FEVER_COOLDOWN_MS;
     this.showFloatingText('FEVER!', this.scale.width * 0.5, this.scale.height * 0.38, {
       color: '#ff77f8',
@@ -1013,11 +1035,13 @@ export default class PlayScene extends Phaser.Scene {
       runDurationMs,
       selectedUpgrades: [...this.selectedUpgrades],
       coinsCollected: this.coinsCollected,
+      feverActivated: this.feverActivated,
+      perfectLevels: this.perfectLevels,
     };
   }
 
   addCoins(amount) {
-    const mult = 1 + this.coinBoost * 0.25;
+    const mult = (1 + this.coinBoost * 0.25) * (this.mutators.coinMult || 1);
     const finalAmount = Math.floor(amount * mult);
     this.coinsCollected += finalAmount;
   }
@@ -1034,9 +1058,33 @@ export default class PlayScene extends Phaser.Scene {
       totalPlayTimeMs: prev.totalPlayTimeMs + run.runDurationMs,
       coins: Math.floor((prev.coins || 0) + run.coinsCollected),
     };
+
+    if (this.challenge) {
+      next.dailyChallenges.lastPlayedDate = this.challenge.date;
+      next.dailyChallenges.bestScore = Math.max(next.dailyChallenges.bestScore || 0, run.score);
+    }
+
+    const newlyUnlocked = checkNewAchievements(run, next);
+    if (newlyUnlocked.length > 0) {
+      next.achievements = [...(next.achievements || []), ...newlyUnlocked];
+      this.showAchievementPopups(newlyUnlocked);
+    }
+
     this.profile = next;
     saveGameProfile(next);
     return { run, profile: next, isNewBest: run.score > prev.highScore };
+  }
+
+  showAchievementPopups(ids) {
+    ids.forEach((id, i) => {
+      this.time.delayedCall(i * 1200, () => {
+        this.showFloatingText(`ACHIEVEMENT UNLOCKED!`, this.scale.width * 0.5, 80, {
+          color: '#ffd700',
+          size: 20,
+          duration: 2500,
+        });
+      });
+    });
   }
 
   formatDuration(ms) {
@@ -1166,11 +1214,22 @@ export default class PlayScene extends Phaser.Scene {
         onChange(ratio);
       };
 
-      bg.on('pointerdown', (pointer) => update(pointer.worldX));
+      bg.on('pointerdown', (pointer) => {
+        update(pointer.worldX);
+        if (this.audio) {
+          const settings = this.audio.getSettings();
+          saveAudioSettings(settings);
+        }
+      });
       
       knob.setInteractive({ useHandCursor: true, draggable: true });
-      knob.on('drag', (pointer, dragX) => {
+      knob.on('drag', (pointer) => {
         update(pointer.worldX);
+      });
+      
+      knob.on('dragend', (pointer) => {
+        const settings = this.audio.getSettings();
+        saveAudioSettings(settings);
       });
 
       return [title, bg, fill, knob, pct];
@@ -1404,7 +1463,8 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   getBulletDamage() {
-    return 1 + this.damageLevel;
+    const base = 1 + this.damageLevel;
+    return base * (this.mutators.damageMult || 1);
   }
 
   canOfferUpgrade(key) {
@@ -1432,6 +1492,18 @@ export default class PlayScene extends Phaser.Scene {
     if (key === 'shield') return this.shieldCharges;
     if (key === 'endlessOverclock' || key === 'endlessBounty' || key === 'endlessCloseCall') return this.endlessPicks;
     return 0;
+  }
+
+  onLevelCleared() {
+    if (!this.tookDamageInLevel) this.perfectLevels += 1;
+    this.tookDamageInLevel = false;
+    this.startNextLevelFlow();
+  }
+
+  startNextLevelFlow() {
+    this.levelClearPending = true;
+    this.audio?.playLevelUp();
+    this.time.delayedCall(LEVEL_CLEAR_RETRY_MS, () => this.tryOpenLevelTransition());
   }
 
   getStackLabelForCard(def) {
@@ -1528,7 +1600,8 @@ export default class PlayScene extends Phaser.Scene {
     const spacing = 36;
     const totalW = Math.max(0, (activePlayers.length - 1) * spacing);
     this.playerHalfSpread = totalW / 2 + 24;
-    const tint = playerTintForLevel(this.currentLevel);
+    const selectedColor = this.profile?.cosmetics?.playerColor || 'default';
+    const tint = playerTintForLevel(this.currentLevel, selectedColor);
 
     activePlayers.forEach((p, i) => {
       const ox = -totalW / 2 + i * spacing;
@@ -1684,6 +1757,14 @@ export default class PlayScene extends Phaser.Scene {
   onLevelCleared() {
     if (this.levelClearPending || this.gameOver) return;
     this.levelClearPending = true;
+    if (!this.tookDamageInLevel) {
+      this.perfectLevels += 1;
+      this.showFloatingText('PERFECT CLEAR!', this.scale.width * 0.5, this.scale.height * 0.42, {
+        color: '#ffd700',
+        size: 20,
+        duration: 1500,
+      });
+    }
     this.addCoins(15);
     this.showFloatingText('LEVEL CLEAR!', this.scale.width * 0.5, this.scale.height * 0.35, {
       color: '#ffffff',
@@ -1703,6 +1784,7 @@ export default class PlayScene extends Phaser.Scene {
   startNextLevel() {
     this.currentLevel += 1;
     this.levelClearPending = false;
+    this.tookDamageInLevel = false;
     this.nextLevelFlowRetryAt = 0;
     this.relayoutFleet();
     this.resetFireTimer();
@@ -2404,6 +2486,7 @@ export default class PlayScene extends Phaser.Scene {
       this.shieldFlashIndex = this.shieldCharges - 1;
       this.shieldFlashUntil = this.time.now + 220;
       this.shieldCharges -= 1;
+      this.tookDamageInLevel = true;
       this.audio?.playShieldAbsorb();
       this.killEnemy(enemy);
       this.updateHud();
@@ -2421,6 +2504,7 @@ export default class PlayScene extends Phaser.Scene {
       this.shieldFlashIndex = this.shieldCharges - 1;
       this.shieldFlashUntil = this.time.now + 220;
       this.shieldCharges -= 1;
+      this.tookDamageInLevel = true;
       this.audio?.playShieldAbsorb();
       if (isDeathOrb) {
         this.showFloatingText('ORB BLOCK', player.x, player.y - 22, { color: '#ff9aa8', size: 12, duration: 340 });

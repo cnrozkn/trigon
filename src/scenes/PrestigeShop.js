@@ -10,9 +10,17 @@ const UPGRADES = [
   { id: 'nearMissRange', name: 'Graze Radius', desc: 'Easier Combos', maxLvl: 3, baseCost: 800, costMult: 1.6 },
 ];
 
+const COSMETICS = [
+  { id: 'default', name: 'Neon Blue', type: 'color', value: 0x88ffff, cost: 0 },
+  { id: 'pink', name: 'Electric Pink', type: 'color', value: 0xff66cc, cost: 100 },
+  { id: 'lime', name: 'Lime Green', type: 'color', value: 0x66ff66, cost: 100 },
+  { id: 'gold', name: 'Solar Gold', type: 'color', value: 0xffd700, cost: 500 },
+];
+
 export default class PrestigeShop extends Phaser.Scene {
   constructor() {
     super({ key: 'PrestigeShop' });
+    this.activeTab = 'upgrades'; // 'upgrades' or 'cosmetics'
   }
 
   create() {
@@ -21,107 +29,211 @@ export default class PrestigeShop extends Phaser.Scene {
     this.audio = this.registry.get('audio') || null;
 
     const bg = this.add.graphics();
-    bg.fillStyle(0x0a0f16, 1);
+    bg.fillGradientStyle(0x0a0f16, 0x0a0f16, 0x141b26, 0x141b26, 1);
     bg.fillRect(0, 0, width, height);
 
     this.add.text(width / 2, 40, 'PRESTIGE SHOP', {
       fontFamily: 'system-ui, sans-serif',
-      fontSize: '32px',
+      fontSize: '28px',
       fontWeight: 'bold',
       color: '#ffd700',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(20);
 
-    this.coinsText = this.add.text(width / 2, 80, `Coins: ${Math.floor(this.profile.coins)}`, {
+    this.coinsText = this.add.text(width / 2, 75, `Coins: ${this.profile.coins}`, {
       fontFamily: 'system-ui, sans-serif',
-      fontSize: '22px',
+      fontSize: '20px',
       color: '#e6f1ff',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(20);
 
-    this.rowsContainer = this.add.container(0, 140);
+    // Tabs
+    this.tabUpgradeBtn = this.add.text(width * 0.3, 130, 'UPGRADES', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '18px',
+      fontWeight: 'bold',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(20);
+
+    this.tabCosmeticBtn = this.add.text(width * 0.7, 130, 'COSMETICS', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '18px',
+      fontWeight: 'bold',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(20);
+
+    this.tabUpgradeBtn.on('pointerdown', () => {
+      this.activeTab = 'upgrades';
+      this.updateTabs();
+      this.drawList(width);
+    });
+
+    this.tabCosmeticBtn.on('pointerdown', () => {
+      this.activeTab = 'cosmetics';
+      this.updateTabs();
+      this.drawList(width);
+    });
+
+    this.updateTabs();
+
+    this.rowsContainer = this.add.container(0, 195);
     this.drawList(width);
 
-    const backBtn = this.add.text(width / 2, height - 50, 'BACK TO MENU', {
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: '24px',
-      color: '#ffffff',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    const backBtn = this.add.container(width / 2, height - 60);
+    const btnBg = this.add.graphics();
+    btnBg.fillStyle(0xffffff, 0.05);
+    btnBg.fillRoundedRect(-100, -25, 200, 50, 25);
+    btnBg.lineStyle(2, 0xffffff, 0.3);
+    btnBg.strokeRoundedRect(-100, -25, 200, 50, 25);
+    backBtn.add(btnBg);
 
+    const btnText = this.add.text(0, 0, 'MENU', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '20px',
+      fontWeight: 'bold',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+    backBtn.add(btnText);
+
+    backBtn.setInteractive(new Phaser.Geom.Rectangle(-100, -25, 200, 50), Phaser.Geom.Rectangle.Contains);
     backBtn.on('pointerdown', () => {
       if (this.audio) this.audio.playUpgradeSelect();
       this.scene.start('Menu');
     });
+
+    backBtn.on('pointerover', () => {
+      btnBg.clear();
+      btnBg.fillStyle(0xffffff, 0.15);
+      btnBg.fillRoundedRect(-100, -25, 200, 50, 25);
+      btnBg.lineStyle(2, 0xffffff, 0.8);
+      btnBg.strokeRoundedRect(-100, -25, 200, 50, 25);
+    });
+
+    backBtn.on('pointerout', () => {
+      btnBg.clear();
+      btnBg.fillStyle(0xffffff, 0.05);
+      btnBg.fillRoundedRect(-100, -25, 200, 50, 25);
+      btnBg.lineStyle(2, 0xffffff, 0.3);
+      btnBg.strokeRoundedRect(-100, -25, 200, 50, 25);
+    });
+  }
+
+  updateTabs() {
+    const activeColor = '#00ffcc';
+    const inactiveColor = '#667788';
+    this.tabUpgradeBtn.setColor(this.activeTab === 'upgrades' ? activeColor : inactiveColor);
+    this.tabCosmeticBtn.setColor(this.activeTab === 'cosmetics' ? activeColor : inactiveColor);
   }
 
   drawList(width) {
     this.rowsContainer.removeAll(true);
     let y = 0;
 
-    UPGRADES.forEach((upg) => {
-      const currentLevel = this.profile.upgrades?.[upg.id] || 0;
-      const isMax = currentLevel >= upg.maxLvl;
-      const cost = isMax ? 0 : Math.floor(upg.baseCost * Math.pow(upg.costMult, currentLevel));
-
-      const row = this.add.container(width / 2, y);
-
-      const bg = this.add.graphics();
-      bg.fillStyle(0x131c2e, 0.8);
-      bg.lineStyle(2, isMax ? 0x64b5f6 : 0x4a90e2, 0.6);
-      bg.fillRoundedRect(-160, -35, 320, 70, 10);
-      bg.strokeRoundedRect(-160, -35, 320, 70, 10);
-
-      const title = this.add.text(-140, -18, `${upg.name} (${currentLevel}/${upg.maxLvl})`, {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '18px',
-        fontWeight: 'bold',
-        color: isMax ? '#aaeebb' : '#ffffff',
-      });
-
-      const desc = this.add.text(-140, 6, upg.desc, {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '14px',
-        color: '#aaaaaa',
-      });
-
-      const btnBg = this.add.graphics();
-      const btnColor = isMax ? 0x555555 : (this.profile.coins >= cost ? 0x22aa55 : 0xcc4444);
-      btnBg.fillStyle(btnColor, 1);
-      btnBg.fillRoundedRect(70, -18, 80, 36, 6);
-
-      const btnZone = this.add.zone(110, 0, 80, 40).setInteractive({ useHandCursor: !isMax });
-
-      const btnText = this.add.text(110, 0, isMax ? 'MAX' : `${cost} C`, {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '16px',
-        fontWeight: 'bold',
-        color: '#ffffff',
-      }).setOrigin(0.5);
-
-      if (!isMax) {
-        btnZone.on('pointerdown', () => {
+    if (this.activeTab === 'upgrades') {
+      UPGRADES.forEach((upg) => {
+        const currentLevel = this.profile.upgrades?.[upg.id] || 0;
+        const isMax = currentLevel >= upg.maxLvl;
+        const cost = isMax ? 0 : Math.floor(upg.baseCost * Math.pow(upg.costMult, currentLevel));
+        const row = this.createRow(width, y, upg.name, upg.desc, currentLevel, upg.maxLvl, cost, isMax, () => {
           if (this.profile.coins >= cost) {
             this.profile.coins -= cost;
             if (!this.profile.upgrades) this.profile.upgrades = {};
             this.profile.upgrades[upg.id] = currentLevel + 1;
             saveGameProfile(this.profile);
-            if (this.audio) this.audio.playLevelUp?.();
-            this.coinsText.setText(`Coins: ${Math.floor(this.profile.coins)}`);
+            this.audio?.playLevelUp?.();
+            this.coinsText.setText(`Coins: ${this.profile.coins}`);
             this.drawList(width);
-          } else {
-            // Cannot afford
-            this.tweens.add({
-              targets: btnText,
-              x: 110 + 4,
-              duration: 50,
-              yoyo: true,
-              repeat: 2,
-            });
           }
         });
-      }
+        this.rowsContainer.add(row);
+        y += 90;
+      });
+    } else {
+      COSMETICS.forEach((item) => {
+        const ownedCosmetics = this.profile.ownedCosmetics || ['default'];
+        const isOwned = ownedCosmetics.includes(item.id);
+        const isActive = this.profile.cosmetics?.playerColor === item.id || 
+                         (item.id === 'default' && (!this.profile.cosmetics?.playerColor || this.profile.cosmetics?.playerColor === 'default'));
+        
+        const row = this.createRow(width, y, item.name, 'Gemi rengini değiştirir.', isOwned ? 1 : 0, 1, item.cost, false, () => {
+          if (isOwned) {
+            if (!this.profile.cosmetics) this.profile.cosmetics = {};
+            this.profile.cosmetics.playerColor = item.id;
+            saveGameProfile(this.profile);
+            this.drawList(width);
+          } else if (this.profile.coins >= item.cost) {
+            this.profile.coins -= item.cost;
+            if (!this.profile.ownedCosmetics) this.profile.ownedCosmetics = ['default'];
+            this.profile.ownedCosmetics.push(item.id);
+            saveGameProfile(this.profile);
+            this.audio?.playLevelUp?.();
+            this.coinsText.setText(`Coins: ${this.profile.coins}`);
+            this.drawList(width);
+          }
+        }, isOwned, isActive, item.value);
+        this.rowsContainer.add(row);
+        y += 90;
+      });
+    }
+  }
 
-      row.add([bg, title, desc, btnBg, btnText, btnZone]);
-      this.rowsContainer.add(row);
-      y += 82;
+  createRow(width, y, name, desc, currentLvl, maxLvl, cost, isMax, onClick, isOwned = false, isActive = false, colorPreview = null) {
+    const row = this.add.container(width / 2, y);
+    const bg = this.add.graphics();
+    bg.fillStyle(0x131c2e, 0.85);
+    bg.lineStyle(2, isActive ? 0x00ffcc : 0x4a90e2, 0.5);
+    bg.fillRoundedRect(-160, -39, 320, 78, 10);
+    bg.strokeRoundedRect(-160, -39, 320, 78, 10);
+
+    let titleStr = name;
+    if (this.activeTab === 'upgrades') titleStr += ` (${currentLvl}/${maxLvl})`;
+    else if (isActive) titleStr += ' [ACTIVE]';
+
+    const title = this.add.text(-142, -24, titleStr, {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '17px',
+      fontWeight: 'bold',
+      color: isMax ? '#aaeebb' : (isActive ? '#00ffcc' : '#ffffff'),
     });
+
+    const description = this.add.text(-142, 6, desc, {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '13px',
+      color: '#999999',
+      wordWrap: { width: 200 }
+    });
+
+    if (colorPreview !== null) {
+      const p = this.add.graphics();
+      p.fillStyle(colorPreview, 1);
+      p.fillTriangle(-148, -12, -158, 2, -138, 2); // Small ship icon
+      row.add(p);
+      title.setX(-132);
+      description.setX(-132);
+    }
+
+    const btnBg = this.add.graphics();
+    let btnLabel = isMax ? 'MAX' : `${cost} C`;
+    if (this.activeTab === 'cosmetics') {
+      if (isActive) btnLabel = 'EQUIPPED';
+      else if (isOwned) btnLabel = 'EQUIP';
+    }
+
+    const canAfford = this.profile.coins >= cost || isOwned;
+    const btnColor = isMax || (isActive && this.activeTab === 'cosmetics') ? 0x444444 : (canAfford ? 0x22aa55 : 0xcc4444);
+    
+    btnBg.fillStyle(btnColor, 1);
+    btnBg.fillRoundedRect(65, -18, 90, 36, 6);
+
+    const btnZone = this.add.zone(110, 0, 90, 40).setInteractive({ useHandCursor: !isMax && !isActive });
+    const btnText = this.add.text(110, 0, btnLabel, {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '14px',
+      fontWeight: 'bold',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+
+    if (!isMax && !isActive) {
+      btnZone.on('pointerdown', onClick);
+    }
+
+    row.add([bg, title, description, btnBg, btnText, btnZone]);
+    return row;
   }
 }

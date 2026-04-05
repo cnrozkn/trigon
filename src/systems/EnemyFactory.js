@@ -19,7 +19,9 @@ function scaleHealth(base, level, mult = 1) {
   return Math.max(1, Math.floor(baseLevelHp * base * mult));
 }
 
-export function buildEnemyConfig(type, level) {
+export function buildEnemyConfig(type, level, mutators = {}) {
+  const hpMult = mutators.enemyHp || 1;
+  
   if (type === 'boss') {
     const usePentagon = Math.floor(level / 5) % 2 === 1;
     const baseBossHp = 38 + level * 7;
@@ -32,7 +34,7 @@ export function buildEnemyConfig(type, level) {
       type,
       texture: usePentagon ? 'boss_pentagon' : 'boss_hexagon',
       tint: null,
-      hp: Math.max(1, tunedBossHp),
+      hp: Math.max(1, Math.floor(tunedBossHp * hpMult)),
       body: 'boss',
       baseVy: 0,
       baseVx: 0,
@@ -45,7 +47,7 @@ export function buildEnemyConfig(type, level) {
     type,
     texture: 'enemy',
     tint: null,
-    hp: scaleHealth(1, level, 1),
+    hp: scaleHealth(1, level, hpMult),
     body: 'circle',
     baseVx: randBetween(-20, 20),
     baseVy: randBetween(36, 58),
@@ -55,7 +57,7 @@ export function buildEnemyConfig(type, level) {
     return {
       ...base,
       texture: 'enemy_zigzag',
-      hp: scaleHealth(1, level, 1),
+      hp: scaleHealth(1, level, hpMult),
       baseVy: randBetween(56, 84),
       zigzagAmp: randBetween(95, 130),
       zigzagFreq: 4.4,
@@ -66,7 +68,7 @@ export function buildEnemyConfig(type, level) {
     return {
       ...base,
       texture: 'enemy_tank',
-      hp: scaleHealth(2, level, 2.5),
+      hp: scaleHealth(2, level, 2.5 * hpMult),
       baseVx: randBetween(-8, 8),
       baseVy: randBetween(20, 34),
       shrapnelOnDeath: true,
@@ -77,7 +79,7 @@ export function buildEnemyConfig(type, level) {
     return {
       ...base,
       texture: 'enemy_splitter',
-      hp: scaleHealth(2, level, 1.3),
+      hp: scaleHealth(2, level, 1.3 * hpMult),
       splitOnDeath: true,
     };
   }
@@ -86,7 +88,7 @@ export function buildEnemyConfig(type, level) {
     return {
       ...base,
       texture: 'enemy_splitter_mini',
-      hp: 1,
+      hp: 1, // Splitter minis are always fragile
       baseVy: randBetween(48, 80),
       baseVx: randBetween(-120, 120),
     };
@@ -96,7 +98,7 @@ export function buildEnemyConfig(type, level) {
     return {
       ...base,
       texture: 'enemy_shooter',
-      hp: scaleHealth(2, level, 1.25),
+      hp: scaleHealth(2, level, 1.25 * hpMult),
       baseVx: 0,
       baseVy: randBetween(24, 35),
       shootEveryMs: 2000,
@@ -108,7 +110,7 @@ export function buildEnemyConfig(type, level) {
     return {
       ...base,
       texture: 'enemy_shield_bearer',
-      hp: scaleHealth(2, level, 1.15),
+      hp: scaleHealth(2, level, 1.15 * hpMult),
       shieldHp: 2,
     };
   }
