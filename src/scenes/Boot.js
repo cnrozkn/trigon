@@ -66,6 +66,87 @@ export default class Boot extends Phaser.Scene {
       g.destroy();
     }
 
+    // Enemy: zigzag runner (inverted neon triangle)
+    {
+      const g = mk(40, 40);
+      g.fillStyle(0x2a1200, 0.95);
+      g.lineStyle(2.5, 0xffa34d, 1);
+      g.beginPath();
+      g.moveTo(20, 32);
+      g.lineTo(8, 10);
+      g.lineTo(32, 10);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      g.generateTexture('enemy_zigzag', 40, 40);
+      g.destroy();
+    }
+
+    // Enemy: tank (neon square)
+    {
+      const g = mk(44, 44);
+      g.fillStyle(0x1a2b0f, 0.95);
+      g.fillRoundedRect(8, 8, 28, 28, 4);
+      g.lineStyle(3, 0xc8ff55, 1);
+      g.strokeRoundedRect(8, 8, 28, 28, 4);
+      g.lineStyle(1, 0xe6ff99, 0.8);
+      g.strokeRoundedRect(11, 11, 22, 22, 3);
+      g.generateTexture('enemy_tank', 44, 44);
+      g.destroy();
+    }
+
+    // Enemy: splitter (diamond)
+    {
+      const g = mk(42, 42);
+      g.fillStyle(0x220f38, 0.95);
+      g.lineStyle(2.5, 0xbb77ff, 1);
+      g.beginPath();
+      g.moveTo(21, 5);
+      g.lineTo(37, 21);
+      g.lineTo(21, 37);
+      g.lineTo(5, 21);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      g.generateTexture('enemy_splitter', 42, 42);
+      g.destroy();
+    }
+
+    // Enemy: splitter mini
+    {
+      const g = mk(24, 24);
+      g.fillStyle(0x2a1850, 0.95);
+      g.lineStyle(1.8, 0xd8a7ff, 1);
+      g.beginPath();
+      g.moveTo(12, 4);
+      g.lineTo(20, 12);
+      g.lineTo(12, 20);
+      g.lineTo(4, 12);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      g.generateTexture('enemy_splitter_mini', 24, 24);
+      g.destroy();
+    }
+
+    // Enemy: shooter (hexagon)
+    {
+      const g = mk(40, 40);
+      drawRegularPolygon(g, 20, 20, 14, 6, 0x2c0f14, 0xff5566, 2.5);
+      g.generateTexture('enemy_shooter', 40, 40);
+      g.destroy();
+    }
+
+    // Enemy: shield bearer (pentagon + aura ring)
+    {
+      const g = mk(44, 44);
+      drawRegularPolygon(g, 22, 22, 13, 5, 0x0f2436, 0x66eaff, 2.5);
+      g.lineStyle(1.6, 0x99f7ff, 0.9);
+      g.strokeCircle(22, 22, 18);
+      g.generateTexture('enemy_shield_bearer', 44, 44);
+      g.destroy();
+    }
+
     // Particle shards
     {
       const g = mk(8, 8);

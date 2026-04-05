@@ -453,6 +453,8 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 
 ## AŞAMA 4: DÜŞMAN ÇEŞİTLİLİĞİ & DALGA SİSTEMİ
 
+**Durum:** Tamamlandı
+
 **Hedef:** Oynanışı derinleştir, monotonluğu kır, taktiksel karar verme ekle.
 
 **Tahmini Efor:** Yüksek  
@@ -465,55 +467,55 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 **Yapılacaklar:**
 
 #### Tip 1: Zigzag Runner (Üçgen Düşman)
-- [ ] Texture: Ters üçgen (aşağı bakan), turuncu neon
-- [ ] Hareket: Hızlı zigzag (sinüs dalga, yüksek frekans)
-- [ ] HP: Düşük (1-2)
-- [ ] Hız: Normal düşmanların 1.5×
-- [ ] İlk görülme: Level 3+
+- [x] Texture: Ters üçgen (aşağı bakan), turuncu neon
+- [x] Hareket: Hızlı zigzag (sinüs dalga, yüksek frekans)
+- [x] HP: Düşük (1-2)
+- [x] Hız: Normal düşmanların 1.5×
+- [x] İlk görülme: Level 3+
 
 #### Tip 2: Tank (Kare Düşman)
-- [ ] Texture: Kare, kalın kenar, sarı-yeşil neon
-- [ ] Hareket: Yavaş, düz dikey iniş
-- [ ] HP: Yüksek (normal düşmanın 3×)
-- [ ] Özellik: Ölürken küçük mermi patlaması (4 yöne 1'er shrapnel)
-- [ ] İlk görülme: Level 5+
+- [x] Texture: Kare, kalın kenar, sarı-yeşil neon
+- [x] Hareket: Yavaş, düz dikey iniş
+- [x] HP: Yüksek (normal düşmanın 3×)
+- [x] Özellik: Ölürken küçük mermi patlaması (4 yöne 1'er shrapnel)
+- [x] İlk görülme: Level 5+
 
 #### Tip 3: Splitter (Elmas/Baklava Düşman)
-- [ ] Texture: 45° döndürülmüş kare (elmas), mor neon
-- [ ] Hareket: Normal hız
-- [ ] HP: Orta
-- [ ] Özellik: Ölürken 2 küçük mini-düşmana bölünür (her biri 1 HP, ters yönlere dağılır)
-- [ ] İlk görülme: Level 7+
+- [x] Texture: 45° döndürülmüş kare (elmas), mor neon
+- [x] Hareket: Normal hız
+- [x] HP: Orta
+- [x] Özellik: Ölürken 2 küçük mini-düşmana bölünür (her biri 1 HP, ters yönlere dağılır)
+- [x] İlk görülme: Level 7+
 
 #### Tip 4: Shooter (Altıgen Düşman)
-- [ ] Texture: Küçük hexagon, kırmızı neon
-- [ ] Hareket: Yavaş iniş, belirli Y'de durup ateş eder
-- [ ] HP: Orta
-- [ ] Özellik: Her 2 saniyede oyuncuya doğru mermi atar (kırmızı küçük parçacık)
-  - Oyuncu mermisi sadece düşman mermisini yok edebilir (collision eklenmeli)
-- [ ] İlk görülme: Level 10+
+- [x] Texture: Küçük hexagon, kırmızı neon
+- [x] Hareket: Yavaş iniş, belirli Y'de durup ateş eder
+- [x] HP: Orta
+- [x] Özellik: Her 2 saniyede oyuncuya doğru mermi atar (kırmızı küçük parçacık)
+  - Oyuncu mermisi düşman mermisini yok edebilir (collision eklendi)
+- [x] İlk görülme: Level 10+
 
 #### Tip 5: Shield Bearer (Pentagon Düşman)
-- [ ] Texture: Küçük pentagon, cyan neon + kalkan aurasıyla
-- [ ] Hareket: Normal
-- [ ] HP: Orta
-- [ ] Özellik: Ön tarafında kalkan var, sadece yandan veya pierce mermiyle vurulabilir
+- [x] Texture: Küçük pentagon, cyan neon + kalkan aurasıyla
+- [x] Hareket: Normal
+- [x] HP: Orta
+- [x] Özellik: Ön tarafında kalkan var, sadece yandan veya pierce mermiyle vurulabilir
   - İlk `shieldHP` kadar hasar absorbe eder, sonra normal HP'ye geçer
-- [ ] İlk görülme: Level 12+
+- [x] İlk görülme: Level 12+
 
 ### 4.2 Dalga (Wave) Sistemi
 
 **Mevcut:** Düşmanlar sürekli ve monoton spawn oluyor (timer-based).
 
 **Yapılacaklar:**
-- [ ] `src/systems/WaveManager.js` oluştur
-- [ ] Her level belirli sayıda wave içerir:
+- [x] `src/systems/WaveManager.js` oluştur
+- [x] Her level belirli sayıda wave içerir:
   ```
   Level 1: 3 wave × 6-8 düşman
   Level 5: 4 wave × 10-12 düşman + boss wave
   Level 10: 5 wave × 12-15 düşman (mixed types) + boss wave
   ```
-- [ ] Wave yapısı:
+- [x] Wave yapısı:
   ```javascript
   {
     enemies: [
@@ -523,10 +525,10 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
     spawnPattern: 'sequential' | 'burst' | 'sides' | 'v_formation'
   }
   ```
-- [ ] **Wave arası mola:** 2-3 saniye "WAVE 2/4" göstergesi ile nefes alma
-- [ ] **Wave clear bonus:** Tüm wave temizlenince +100 bonus skor + patlama efekti
-- [ ] **Level clear:** Son wave (boss dahil) temizlenince upgrade seçimi + büyük "LEVEL CLEAR!" animasyonu
-- [ ] Spawn pattern'leri:
+- [x] **Wave arası mola:** 2-3 saniye "WAVE 2/4" göstergesi ile nefes alma
+- [x] **Wave clear bonus:** Tüm wave temizlenince +100 bonus skor + patlama efekti
+- [x] **Level clear:** Son wave (boss dahil) temizlenince upgrade seçimi + büyük "LEVEL CLEAR!" animasyonu
+- [x] Spawn pattern'leri:
   - `sequential`: Tek tek gelir
   - `burst`: Hepsi aynı anda
   - `sides`: Sol ve sağ kenarlardan
@@ -537,17 +539,17 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 **Mevcut:** Texture'lar üretiliyor ama kullanılmıyor.
 
 **Yapılacaklar:**
-- [ ] Düşman öldüğünde %8 şansla power-up drop
-- [ ] Power-up'lar yavaşça aşağı düşer (vy: 30-40)
-- [ ] Oyuncu dokunarak toplar
-- [ ] Tipler (zaten texture'lar var):
+- [x] Düşman öldüğünde %8 şansla power-up drop
+- [x] Power-up'lar yavaşça aşağı düşer (vy: 30-40)
+- [x] Oyuncu dokunarak toplar
+- [x] Tipler (zaten texture'lar var):
   | Power-up | Texture | Efekt | Süre |
   |----------|---------|-------|------|
   | Shield | `powerup_shield` | +1 shield charge | Anında |
   | Pierce | `powerup_pierce` | Tüm mermiler 5 sn pierce | 5s |
   | Slow | `powerup_slow` | Tüm düşmanlar %50 yavaş | 4s |
-- [ ] Aktif power-up göstergesi HUD'da (timer bar)
-- [ ] Power-up toplarken ses efekti + parlama efekti
+- [x] Aktif power-up göstergesi HUD'da (timer bar)
+- [x] Power-up toplarken ses efekti + parlama efekti
 
 ### 4.4 Enemy Spawn Level Tablosu
 
@@ -561,6 +563,15 @@ Aşağıdaki tablo hangi level'da hangi düşman tipinin aktifleştiğini göste
 | 7-9 | ✅ | ✅ | ✅ | ✅ | — | — |
 | 10-11 | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 | 12+ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+**Uygulama Notları (v1):**
+- Wave tabanlı ilerleme için `src/systems/WaveManager.js`, `src/systems/WaveDefinitions.js` ve `src/systems/EnemyFactory.js` eklendi.
+- `PlayScene` timer/kill threshold yerine dalga temizleme akışıyla seviye atlar; wave clear bonusu ve level clear upgrade tetikleyicisi eklendi.
+- Yeni düşman tipleri (zigzag, tank, splitter, shooter, shield bearer) texture + davranış + özel ölüm etkileriyle entegre edildi.
+- `src/systems/PowerupSystem.js` ile `%8` drop, pickup collision, `pierce`/`slow` süreli bufflar ve HUD timer barı eklendi.
+- Shooter mermileri ile oyuncu mermisi çarpışması ve shield bearers için önden bloklama/yandan vurma kuralı uygulandı.
+- Stabilizasyon güncellemesi: power-up pickup'lar yan sınırlar içinde tutuldu, enemy projectile'lar üst/yan sınırda da temizlenir hale getirildi ve küçük düşmanlarda HP metni auto-fit ile taşma sorunu giderildi.
+- Son dokunuş: üçgen tabanlı düşmanlarda HP font/stroke daha kompakt hale getirildi ve pickup sistemine stuck-watchdog eklenerek ekranda sabit kalma edge-case'i temizlendi.
 
 ---
 

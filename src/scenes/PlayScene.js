@@ -1,15 +1,14 @@
 import * as Phaser from 'phaser';
 import { loadGameProfile, saveGameProfile } from '../utils/Storage.js';
+import WaveManager from '../systems/WaveManager.js';
+import PowerupSystem from '../systems/PowerupSystem.js';
+import { buildEnemyConfig } from '../systems/EnemyFactory.js';
 
 const START_PLAYER_COUNT = 1;
 const MAX_PLAYER_COUNT = 6;
-const KILLS_PER_LEVEL = 10;
-const UPGRADE_INTERVAL_MS = 22000;
 
 const BASE_FIRE_MS = 380;
 const MIN_FIRE_MS = 120;
-const BASE_ENEMY_SPAWN_MS = 900;
-const MIN_ENEMY_SPAWN_MS = 260;
 
 const DRAFT_REROLLS = 2;
 const COMBO_WINDOW_MS = 2500;
@@ -77,7 +76,7 @@ export default class PlayScene extends Phaser.Scene {
   init() {
     this.score = 0;
     this.currentLevel = 1;
-    this.killsThisLevel = 0;
+    this.levelClearPending = false;
 
     this.formationX = 0;
     this.targetFormationX = 0;
@@ -86,7 +85,8 @@ export default class PlayScene extends Phaser.Scene {
 
     this.gameOver = false;
     this.isChoosingUpgrade = false;
-    this.bossSpawnedForLevel = new Set();
+    this.waveManager = null;
+    this.powerupSystem = null;
 
     // Roguelite build state
     this.fireRateLevel = 0;
@@ -157,10 +157,14 @@ export default class PlayScene extends Phaser.Scene {
     this.onboardingEnemyPreview = null;
 
     this.hudLevel = null;
+    this.hudWave = null;
     this.hudCombo = null;
     this.hudShields = null;
     this.progressBarBg = null;
     this.progressBarFill = null;
+    this.powerupBarBg = null;
+    this.powerupBarFill = null;
+    this.powerupBarText = null;
   }
 
   /** World bounds: narrow X for side bounce; open top/bottom for spawn & recycle. */
@@ -253,8 +257,12 @@ export default class PlayScene extends Phaser.Scene {
 
     this.hudScore.setPosition(16, 16);
     if (this.hudLevel) this.hudLevel.setPosition(16, 40);
+    if (this.hudWave) this.hudWave.setPosition(16, 60);
     if (this.progressBarBg) this.progressBarBg.setPosition(74, 66);
     if (this.progressBarFill) this.progressBarFill.setPosition(74, 66);
+    if (this.powerupBarBg) this.powerupBarBg.setPosition(74, 80);
+    if (this.powerupBarFill) this.powerupBarFill.setPosition(74, 80);
+    if (this.powerupBarText) this.powerupBarText.setPosition(16, 80);
     if (this.hudCombo) this.hudCombo.setPosition(width * 0.5, 88);
     if (this.pauseButton) this.pauseButton.setPosition(width - 24, 24);
     if (this.hudShields) this.drawHudShields();
@@ -352,6 +360,7 @@ export default class PlayScene extends Phaser.Scene {
 
     this.players = this.physics.add.group();
     this.bullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite, maxSize: 220 });
+    this.enemyBullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite, maxSize: 260 });
     this.enemies = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite });
 
     this.playerBaseY = height - 90;
@@ -382,8 +391,25 @@ export default class PlayScene extends Phaser.Scene {
         color: '#ccddff',
       })
       .setDepth(100);
+    this.hudWave = this.add
+      .text(16, 60, 'WAVE 0/0', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#9fd6ff',
+      })
+      .setDepth(100);
     this.progressBarBg = this.add.rectangle(74, 66, 112, 8, 0x172236, 0.95).setDepth(100).setOrigin(0, 0.5);
     this.progressBarFill = this.add.rectangle(74, 66, 112, 8, 0x66cfff, 1).setDepth(101).setOrigin(0, 0.5);
+    this.powerupBarBg = this.add.rectangle(74, 80, 112, 6, 0x122430, 0.9).setDepth(100).setOrigin(0, 0.5);
+    this.powerupBarFill = this.add.rectangle(74, 80, 0, 6, 0xffcc66, 0.95).setDepth(101).setOrigin(0, 0.5);
+    this.powerupBarText = this.add
+      .text(16, 80, '', {
+        fontFamily: 'ui-monospace, monospace',
+        fontSize: '11px',
+        color: '#ffe8af',
+      })
+      .setDepth(101);
     this.hudShields = this.add.graphics().setDepth(100);
     this.hudCombo = this.add
       .text(width * 0.5, 88, 'x0', {
@@ -416,15 +442,20 @@ export default class PlayScene extends Phaser.Scene {
 
     this.physics.add.overlap(this.bullets, this.enemies, this.onBulletHitEnemy, undefined, this);
     this.physics.add.overlap(this.players, this.enemies, this.onPlayerHitEnemy, undefined, this);
+    this.physics.add.overlap(this.players, this.enemyBullets, this.onPlayerHitEnemyBullet, undefined, this);
+    this.physics.add.overlap(this.bullets, this.enemyBullets, this.onBulletHitEnemyBullet, undefined, this);
 
     this.resetFireTimer();
-    this.resetSpawnTimer();
 
-    this.upgradeTimer = this.time.addEvent({
-      delay: UPGRADE_INTERVAL_MS,
-      loop: true,
-      callback: () => this.openUpgradeSelection(),
+    this.powerupSystem = new PowerupSystem(this);
+    this.powerupSystem.create();
+    this.waveManager = new WaveManager(this, {
+      onSpawn: (spawn, wave) => this.spawnFromWave(spawn, wave),
+      onWaveStart: (ctx) => this.onWaveStarted(ctx),
+      onWaveClear: (ctx) => this.onWaveCleared(ctx),
+      onLevelClear: (ctx) => this.onLevelCleared(ctx),
     });
+    this.waveManager.startLevel(this.currentLevel);
 
     this.input.on('pointermove', (pointer) => {
       if (!this.gameOver && !this.isChoosingUpgrade && !this.onboardingActive) this.targetFormationX = pointer.worldX;
@@ -456,13 +487,18 @@ export default class PlayScene extends Phaser.Scene {
         this.onboardingTimer.remove(false);
         this.onboardingTimer = null;
       }
+      this.waveManager = null;
+      this.powerupSystem = null;
       this.audio?.setSceneState({ level: this.currentLevel, isBoss: false, inUpgrade: false });
     });
   }
 
   update(_time, delta) {
     this.updateBackgroundFx(delta);
+    // Keep drop cleanup active even when gameplay is paused by overlays.
+    this.powerupSystem?.update(this.time.now);
     if (this.gameOver || this.isChoosingUpgrade || this.isPausedByUser || this.onboardingActive) return;
+    this.waveManager?.update(delta);
     if (this.killStreak > 0 && this.time.now - this.lastKillAt > COMBO_WINDOW_MS) {
       this.killStreak = 0;
       this.updateComboHud();
@@ -487,10 +523,14 @@ export default class PlayScene extends Phaser.Scene {
       if (!e || !e.active) return;
 
       const txt = e.getData('healthText');
-      if (txt && txt.active) txt.setPosition(e.x, e.y);
+      const hpTextYOffset = e.getData('hpTextYOffset') || 0;
+      if (txt && txt.active) txt.setPosition(e.x, e.y + hpTextYOffset);
 
       const slowUntil = e.getData('slowUntil') || 0;
-      const slowFactor = slowUntil > this.time.now ? 0.6 : 1;
+      const localSlow = slowUntil > this.time.now ? 0.6 : 1;
+      const globalSlow = this.powerupSystem?.getGlobalSlowMultiplier() ?? 1;
+      const slowFactor = localSlow * globalSlow;
+      const enemyType = e.getData('enemyType') || 'circle';
 
       if (e.getData('isBoss')) {
         const t = this.time.now * 0.001;
@@ -517,8 +557,28 @@ export default class PlayScene extends Phaser.Scene {
       } else {
         const baseVy = e.getData('baseVy') || 45;
         const vy = baseVy * slowFactor;
-        e.setVelocityX(e.body.velocity.x);
-        e.setVelocityY(vy);
+        if (enemyType === 'zigzag') {
+          const t = this.time.now * 0.001;
+          const amp = e.getData('zigzagAmp') || 100;
+          const freq = e.getData('zigzagFreq') || 4.4;
+          e.setVelocityX(Math.sin((e.getData('zigzagSeed') || 0) + t * freq) * amp * slowFactor);
+          e.setVelocityY(vy);
+        } else if (enemyType === 'shooter') {
+          const stopY = e.getData('stopY') || 180;
+          if (e.y < stopY) {
+            e.setVelocity(0, vy);
+          } else {
+            e.setVelocity(0, 0);
+            const nextShootAt = e.getData('nextShootAt') || 0;
+            if (this.time.now >= nextShootAt) {
+              this.spawnEnemyBulletAtPlayer(e.x, e.y + 18);
+              e.setData('nextShootAt', this.time.now + (e.getData('shootEveryMs') || 2000));
+            }
+          }
+        } else {
+          e.setVelocityX(e.body.velocity.x);
+          e.setVelocityY(vy);
+        }
       }
       return true;
     });
@@ -530,6 +590,18 @@ export default class PlayScene extends Phaser.Scene {
       }
       return true;
     });
+    this.enemyBullets.children.iterate((b) => {
+      if (!b || !b.active) return true;
+      if (
+        b.y > this.scale.height + 55 ||
+        b.y < -55 ||
+        b.x < this.playLeft - 35 ||
+        b.x > this.playRight + 35
+      ) {
+        this.recycleEnemyBullet(b);
+      }
+      return true;
+    });
 
     this.enemies.children.iterate((e) => {
       if (e && e.active && e.y > this.scale.height + 95) this.recycleEnemy(e);
@@ -538,6 +610,7 @@ export default class PlayScene extends Phaser.Scene {
     this.drawShieldRings();
     this.prevFormationX = this.formationX;
     this.updateProgressBar();
+    this.updatePowerupHud();
   }
 
   updateBackgroundFx(delta = 16.6) {
@@ -683,7 +756,7 @@ export default class PlayScene extends Phaser.Scene {
     this.hitStopActive = true;
     this.physics.world.timeScale = 0.02;
     if (this.fireTimer) this.fireTimer.paused = true;
-    if (this.spawnTimer) this.spawnTimer.paused = true;
+    this.waveManager?.setPaused(true);
     if (strong && this.screenFlash) {
       this.screenFlash.setVisible(true).setAlpha(0.45);
       this.tweens.add({ targets: this.screenFlash, alpha: 0, duration: 140, onComplete: () => this.screenFlash.setVisible(false) });
@@ -691,7 +764,7 @@ export default class PlayScene extends Phaser.Scene {
     this.hitStopRestoreId = setTimeout(() => {
       this.physics.world.timeScale = 1;
       if (this.fireTimer && !this.gameOver && !this.isChoosingUpgrade) this.fireTimer.paused = false;
-      if (this.spawnTimer && !this.gameOver && !this.isChoosingUpgrade) this.spawnTimer.paused = false;
+      if (!this.gameOver && !this.isChoosingUpgrade) this.waveManager?.setPaused(false);
       this.hitStopActive = false;
       this.hitStopRestoreId = null;
     }, durationMs);
@@ -753,18 +826,43 @@ export default class PlayScene extends Phaser.Scene {
   updateHud() {
     this.hudScore?.setText(`Score: ${this.score}`);
     this.hudLevel?.setText(`LV.${this.currentLevel}`);
+    const waveCtx = this.waveManager?.getWaveContext?.();
+    if (waveCtx && this.hudWave) {
+      const waveNo = Math.max(0, waveCtx.waveIndex + 1);
+      this.hudWave.setText(`WAVE ${waveNo}/${waveCtx.totalWaves}`);
+    }
     this.updateProgressBar();
+    this.updatePowerupHud();
     this.drawHudShields();
     this.updateComboHud();
   }
 
   updateProgressBar() {
     if (!this.progressBarFill) return;
-    const ratio = Phaser.Math.Clamp(this.killsThisLevel / KILLS_PER_LEVEL, 0, 1);
+    const ratio = this.waveManager?.getProgressRatio?.() ?? 0;
     const width = 112;
     this.progressBarFill.width = Math.max(2, width * ratio);
     const hue = this.currentLevel < 5 ? 0x66cfff : this.currentLevel < 10 ? 0xaa88ff : this.currentLevel < 15 ? 0xff7799 : 0xffb455;
     this.progressBarFill.setFillStyle(hue, 1);
+  }
+
+  updatePowerupHud() {
+    if (!this.powerupBarFill || !this.powerupBarText) return;
+    const buffs = this.powerupSystem?.getActiveBuffs?.() || [];
+    if (buffs.length === 0) {
+      this.powerupBarFill.width = 0;
+      this.powerupBarText.setText('');
+      return;
+    }
+    const strongest = buffs.reduce((a, b) => (a.remainingMs > b.remainingMs ? a : b));
+    const ratio = Phaser.Math.Clamp(strongest.remainingMs / strongest.maxMs, 0, 1);
+    this.powerupBarFill.width = Math.max(2, 112 * ratio);
+    this.powerupBarFill.setFillStyle(strongest.key === 'PIERCE' ? 0xffcc66 : 0x88ffcc, 0.95);
+    this.powerupBarText.setText(
+      buffs
+        .map((buff) => `${buff.key}:${Math.ceil(buff.remainingMs / 1000)}s`)
+        .join('  '),
+    );
   }
 
   drawHudShields() {
@@ -805,13 +903,11 @@ export default class PlayScene extends Phaser.Scene {
     if (paused) {
       this.physics.pause();
       if (this.fireTimer) this.fireTimer.paused = true;
-      if (this.spawnTimer) this.spawnTimer.paused = true;
-      if (this.upgradeTimer) this.upgradeTimer.paused = true;
+      this.waveManager?.setPaused(true);
     } else {
       this.physics.resume();
       if (this.fireTimer) this.fireTimer.paused = false;
-      if (this.spawnTimer) this.spawnTimer.paused = false;
-      if (this.upgradeTimer) this.upgradeTimer.paused = false;
+      this.waveManager?.setPaused(false);
     }
   }
 
@@ -1092,11 +1188,7 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   getCurrentEnemySpawnDelay() {
-    let delay;
-    if (this.currentLevel <= 5) delay = BASE_ENEMY_SPAWN_MS - (this.currentLevel - 1) * 45;
-    else if (this.currentLevel <= 12) delay = 720 - (this.currentLevel - 5) * 52;
-    else delay = 360;
-    return Math.max(MIN_ENEMY_SPAWN_MS, Math.floor(delay));
+    return 0;
   }
 
   getCritChance() {
@@ -1196,12 +1288,7 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   resetSpawnTimer() {
-    if (this.spawnTimer) this.spawnTimer.remove(false);
-    this.spawnTimer = this.time.addEvent({
-      delay: this.getCurrentEnemySpawnDelay(),
-      loop: true,
-      callback: () => this.trySpawnEnemy(),
-    });
+    // WaveManager controls spawning in Phase 4.
   }
 
   addPlayerToFleet() {
@@ -1234,74 +1321,87 @@ export default class PlayScene extends Phaser.Scene {
     });
   }
 
-  trySpawnEnemy() {
-    if (this.gameOver || this.isChoosingUpgrade) return;
-    if (this.hasActiveBoss()) return;
-
-    const spawnMinX = this.playLeft + 26;
-    const spawnMaxX = this.playRight - 26;
-    const early = this.currentLevel <= 4;
-    const hp = early
-      ? 1
-      : Phaser.Math.Between(1 + Math.floor(this.currentLevel * 0.45), 2 + Math.floor(this.currentLevel * 0.95));
-
-    const count = this.currentLevel < 5 ? 2 : this.currentLevel < 10 ? 3 : 4;
-    const speed = enemySpeedMultiplier(this.currentLevel);
-
-    for (let i = 0; i < count; i++) {
-      const x = Phaser.Math.Between(spawnMinX, spawnMaxX);
-      const y = -40 - i * 34;
-      const vy = Phaser.Math.Between(36, 58) * speed;
-      const vx = Phaser.Math.Between(-20, 20);
-      this.spawnEnemyAt(x, y, hp, false, vy, vx);
-    }
+  getActiveEnemyCount() {
+    return this.enemies?.getChildren()?.filter((e) => e.active).length || 0;
   }
 
-  spawnEnemyAt(x, y, health, isBoss, vy, vx = 0) {
-    let sprite;
+  getActiveEnemyBulletCount() {
+    return this.enemyBullets?.getChildren()?.filter((b) => b.active).length || 0;
+  }
 
+  spawnFromWave(spawn) {
+    const config = buildEnemyConfig(spawn.type, this.currentLevel);
+    const x = spawn.x ?? Phaser.Math.Between(this.playLeft + 24, this.playRight - 24);
+    const y = spawn.y ?? -44;
+    const sprite = this.enemies.create(x, y, config.texture);
+    if (!sprite) return null;
+
+    sprite.setActive(true).setVisible(true);
+    sprite.body.setAllowGravity(false);
+    sprite.body.reset(x, y);
+
+    const isBoss = Boolean(config.isBoss);
     if (isBoss) {
-      const usePentagon = Math.floor(this.currentLevel / 5) % 2 === 1;
-      const key = usePentagon ? 'boss_pentagon' : 'boss_hexagon';
-      sprite = this.enemies.create(x, y, key);
       sprite.setScale(0.85);
       sprite.setDepth(5);
       sprite.body.setSize(100, 100);
       sprite.body.setOffset(10, 10);
-      sprite.setData('isBoss', true);
-      sprite.setData('pattern', usePentagon ? 0 : 1);
+      sprite.setCollideWorldBounds(false);
+      sprite.setData('pattern', config.pattern || 0);
     } else {
-      sprite = this.enemies.create(x, y, 'enemy');
       sprite.setDepth(4);
-      sprite.body.setCircle(15, 5, 5);
-      sprite.setVelocity(vx, vy);
-      sprite.setData('baseVx', vx);
-      sprite.setData('baseVy', vy);
       sprite.setCollideWorldBounds(true);
       sprite.setBounce(1, 0);
+      sprite.setData('baseVx', spawn.vx ?? config.baseVx ?? 0);
+      sprite.setData('baseVy', config.baseVy ?? 45);
+      if (config.type === 'tank') sprite.body.setSize(28, 28).setOffset(8, 8);
+      else if (config.type === 'splitter' || config.type === 'shieldBearer') sprite.body.setCircle(14, 7, 7);
+      else if (config.type === 'splitterMini') sprite.body.setCircle(8, 4, 4);
+      else sprite.body.setCircle(15, 5, 5);
+      sprite.setVelocity(sprite.getData('baseVx') || 0, sprite.getData('baseVy') || 45);
     }
 
-    sprite.setTint(enemyColorForLevel(this.currentLevel));
-    sprite.setData('health', health);
-    sprite.setData('maxHealth', health);
+    sprite.setTint(isBoss ? 0xffffff : enemyColorForLevel(this.currentLevel));
+    sprite.setData('isBoss', isBoss);
+    sprite.setData('enemyType', config.type);
+    sprite.setData('health', config.hp);
+    sprite.setData('maxHealth', config.hp);
     sprite.setData('slowUntil', 0);
-    if (isBoss) {
-      sprite.setCollideWorldBounds(false);
-    }
-    sprite.body.setAllowGravity(false);
+    sprite.setData('shieldHp', config.shieldHp || 0);
+    sprite.setData('splitOnDeath', Boolean(config.splitOnDeath));
+    sprite.setData('shrapnelOnDeath', Boolean(config.shrapnelOnDeath));
+    sprite.setData('stopY', config.stopY || 0);
+    sprite.setData('shootEveryMs', config.shootEveryMs || 0);
+    sprite.setData('nextShootAt', this.time.now + Phaser.Math.Between(500, 1300));
+    sprite.setData('zigzagAmp', config.zigzagAmp || 0);
+    sprite.setData('zigzagFreq', config.zigzagFreq || 0);
+    sprite.setData('zigzagSeed', Math.random() * Math.PI * 2);
+
+    const hpTextStyleByType = {
+      splitterMini: { size: 9, stroke: 2, yOffset: 0 },
+      zigzag: { size: 10, stroke: 2, yOffset: 2 },
+      shooter: { size: 10, stroke: 2, yOffset: 0 },
+      splitter: { size: 11, stroke: 2, yOffset: 0 },
+      shieldBearer: { size: 10, stroke: 2, yOffset: 0 },
+      tank: { size: 12, stroke: 3, yOffset: 0 },
+      circle: { size: 12, stroke: 3, yOffset: 0 },
+    };
+    const hpStyle = isBoss
+      ? { size: 28, stroke: 4, yOffset: 0 }
+      : hpTextStyleByType[config.type] || { size: 11, stroke: 2, yOffset: 0 };
 
     const txt = this.add
-      .text(sprite.x, sprite.y, String(health), {
+      .text(sprite.x, sprite.y, String(config.hp), {
         fontFamily: 'system-ui, monospace',
-        fontSize: isBoss ? '28px' : '14px',
+        fontSize: `${hpStyle.size}px`,
         fontStyle: 'bold',
         color: '#ffffff',
       })
       .setOrigin(0.5)
       .setDepth(20)
-      .setStroke('#000000', 4);
-
+      .setStroke('#000000', hpStyle.stroke);
     sprite.setData('healthText', txt);
+    sprite.setData('hpTextYOffset', hpStyle.yOffset || 0);
     return sprite;
   }
 
@@ -1315,42 +1415,51 @@ export default class PlayScene extends Phaser.Scene {
     return found;
   }
 
-  maybeSpawnBossForLevel() {
-    if (this.currentLevel < 5) return false;
-    if (this.currentLevel % 5 !== 0) return false;
-    if (this.bossSpawnedForLevel.has(this.currentLevel)) return false;
-    if (this.hasActiveBoss()) return false;
-
-    this.bossSpawnedForLevel.add(this.currentLevel);
-    const cx = (this.playLeft + this.playRight) * 0.5;
-    const hp = 35 + this.currentLevel * 6;
-    this.spawnEnemyAt(cx, -88, hp, true, 0, 0);
-    this.syncAudioSceneState();
-    return true;
+  onWaveStarted(ctx) {
+    this.hudWave?.setText(`WAVE ${Math.max(1, ctx.waveIndex + 1)}/${ctx.totalWaves}`);
+    this.showFloatingText(`WAVE ${Math.max(1, ctx.waveIndex + 1)}/${ctx.totalWaves}`, this.scale.width * 0.5, 92, {
+      color: '#bce5ff',
+      size: 18,
+      duration: 640,
+    });
   }
 
-  applyLevelUp() {
-    this.currentLevel += 1;
-    this.killsThisLevel = 0;
+  onWaveCleared(ctx) {
+    this.score += 100;
+    this.showFloatingText('WAVE CLEAR +100', this.scale.width * 0.5, 110, {
+      color: '#99f1ff',
+      size: 20,
+      duration: 900,
+    });
+    this.audio?.playLevelUp?.();
+    this.updateHud();
+    this.hudWave?.setText(`WAVE ${Math.max(1, ctx.waveIndex + 1)}/${ctx.totalWaves}`);
+  }
 
-    this.relayoutFleet();
-    const bossSpawned = this.maybeSpawnBossForLevel();
-    this.resetSpawnTimer();
-    this.resetFireTimer();
+  onLevelCleared() {
+    if (this.levelClearPending || this.gameOver) return;
+    this.levelClearPending = true;
+    this.showFloatingText('LEVEL CLEAR!', this.scale.width * 0.5, this.scale.height * 0.35, {
+      color: '#ffffff',
+      size: 34,
+      duration: 1150,
+      scaleFrom: 0.7,
+    });
     this.pulsePlayfieldFrame();
-    if (this.progressBarBg) {
-      this.tweens.add({
-        targets: this.progressBarBg,
-        alpha: 0.25,
-        duration: 90,
-        yoyo: true,
-        repeat: 2,
-      });
-    }
-    this.audio?.playLevelUp();
+    this.audio?.playLevelUp?.();
+    this.time.delayedCall(780, () => {
+      if (!this.gameOver) this.openUpgradeSelection();
+    });
+  }
+
+  startNextLevel() {
+    this.currentLevel += 1;
+    this.levelClearPending = false;
+    this.relayoutFleet();
+    this.resetFireTimer();
+    this.waveManager?.startLevel(this.currentLevel);
     this.syncAudioSceneState();
     this.updateHud();
-    if (bossSpawned) this.fireFleet();
   }
 
   pulsePlayfieldFrame() {
@@ -1383,8 +1492,53 @@ export default class PlayScene extends Phaser.Scene {
     b.setDepth(8);
     b.setVelocity(vx, -470);
     b.setTint(0x88ffff);
-    b.setData('pierceLeft', this.pierceLevel);
+    const buffPierce = this.powerupSystem?.hasPierceBuff?.() ? 99 : 0;
+    b.setData('pierceLeft', this.pierceLevel + buffPierce);
     b.setData('trailAt', 0);
+  }
+
+  spawnEnemyBulletAtPlayer(x, y) {
+    const player = this.players.getChildren().find((p) => p.active);
+    if (!player) return;
+    const b = this.enemyBullets.get(x, y, 'bullet');
+    if (!b) return;
+    const dx = player.x - x;
+    const dy = player.y - y;
+    const len = Math.max(1, Math.hypot(dx, dy));
+    const speed = 220;
+    b.setActive(true).setVisible(true);
+    b.body.reset(x, y);
+    b.body.setAllowGravity(false);
+    b.setDepth(7);
+    b.setTint(0xff5566);
+    b.setScale(0.85, 0.95);
+    b.setVelocity((dx / len) * speed, (dy / len) * speed);
+  }
+
+  spawnEnemyShrapnel(x, y, vx, vy) {
+    const b = this.enemyBullets.get(x, y, 'particle_square');
+    if (!b) return;
+    b.setActive(true).setVisible(true);
+    b.body.reset(x, y);
+    b.body.setAllowGravity(false);
+    b.setDepth(7);
+    b.setTint(0xffcc66);
+    b.setScale(0.8);
+    b.setVelocity(vx, vy);
+    this.time.delayedCall(900, () => {
+      if (b.active) this.recycleEnemyBullet(b);
+    });
+  }
+
+  showPickupFlash() {
+    if (!this.screenFlash) return;
+    this.screenFlash.setVisible(true).setAlpha(0.25);
+    this.tweens.add({
+      targets: this.screenFlash,
+      alpha: 0,
+      duration: 130,
+      onComplete: () => this.screenFlash?.setVisible(false),
+    });
   }
 
   fireFleet() {
@@ -1438,6 +1592,18 @@ export default class PlayScene extends Phaser.Scene {
       bullet.body.reset(bullet.x, bullet.y);
     }
 
+    const shieldHp = enemy.getData('shieldHp') || 0;
+    if (shieldHp > 0) {
+      const sideHit = Math.abs(bullet.x - enemy.x) > 10;
+      const piercing = this.powerupSystem?.hasPierceBuff?.();
+      if (!sideHit && !piercing) {
+        enemy.setData('shieldHp', Math.max(0, shieldHp - damage));
+        this.showFloatingText('BLOCK', enemy.x, enemy.y - 10, { color: '#9feaff', size: 13, duration: 380 });
+        this.emitImpactBurst(enemy.x, enemy.y, false);
+        return;
+      }
+    }
+
     const hp = enemy.getData('health') - damage;
     enemy.setData('health', hp);
     const txt = enemy.getData('healthText');
@@ -1461,10 +1627,18 @@ export default class PlayScene extends Phaser.Scene {
     if (hp <= 0) this.killEnemy(enemy);
   }
 
+  onBulletHitEnemyBullet(playerBullet, enemyBullet) {
+    if (!playerBullet.active || !enemyBullet.active) return;
+    this.recycleBullet(playerBullet);
+    this.recycleEnemyBullet(enemyBullet);
+    this.emitImpactBurst(enemyBullet.x, enemyBullet.y, false);
+  }
+
   killEnemy(enemy) {
     const x = enemy.x;
     const y = enemy.y;
     const isBoss = enemy.getData('isBoss');
+    const type = enemy.getData('enemyType') || 'circle';
     this.updateKillStreakOnKill();
     if (isBoss) this.audio?.playBossDeath();
     else this.audio?.playEnemyDeath();
@@ -1474,15 +1648,26 @@ export default class PlayScene extends Phaser.Scene {
     if (this.geoBurst) this.geoBurst.explode(isBoss ? 20 : 9, x, y);
     this.emitEnemyWireframe(enemy, isBoss);
 
+    if (enemy.getData('splitOnDeath') && !isBoss) {
+      this.spawnFromWave({ type: 'splitterMini', x: x - 12, y: y - 4, vx: -130, spawnDelay: 0 });
+      this.spawnFromWave({ type: 'splitterMini', x: x + 12, y: y - 4, vx: 130, spawnDelay: 0 });
+    }
+    if (enemy.getData('shrapnelOnDeath') && !isBoss) {
+      [
+        [0, 200],
+        [0, -200],
+        [200, 0],
+        [-200, 0],
+      ].forEach(([vx, vy]) => this.spawnEnemyShrapnel(x, y, vx, vy));
+    }
+
     this.recycleEnemy(enemy);
 
     this.score += isBoss ? 250 : 10;
     this.runKills += 1;
-
-    this.killsThisLevel += 1;
+    if (!isBoss && type !== 'splitterMini') this.powerupSystem?.maybeDropAt(x, y);
     this.syncAudioSceneState();
     this.updateHud();
-    if (this.killsThisLevel >= KILLS_PER_LEVEL) this.applyLevelUp();
   }
 
   openUpgradeSelection() {
@@ -1498,6 +1683,7 @@ export default class PlayScene extends Phaser.Scene {
     this.syncAudioSceneState();
     if (this.pauseButton) this.pauseButton.setVisible(false);
     if (this.shieldRingG) this.shieldRingG.clear();
+    this.clearTransientCombatVisuals();
     this.setPlayflowPaused(true);
 
     const { width, height } = this.scale;
@@ -1505,6 +1691,18 @@ export default class PlayScene extends Phaser.Scene {
     this.overlayBg.setAlpha(0.52);
 
     this.renderDraftModal();
+  }
+
+  clearTransientCombatVisuals() {
+    this.bullets?.children?.iterate((bullet) => {
+      if (bullet && bullet.active) this.recycleBullet(bullet);
+      return true;
+    });
+    this.enemyBullets?.children?.iterate((bullet) => {
+      if (bullet && bullet.active) this.recycleEnemyBullet(bullet);
+      return true;
+    });
+    this.powerupSystem?.clearActivePickups?.();
   }
 
   fillDraftSlotsToThree() {
@@ -1759,6 +1957,7 @@ export default class PlayScene extends Phaser.Scene {
     if (this.pauseButton) this.pauseButton.setVisible(true);
     this.updateHud();
     this.syncAudioSceneState();
+    if (this.levelClearPending) this.startNextLevel();
   }
 
   onPlayerHitEnemy(player, enemy) {
@@ -1777,8 +1976,28 @@ export default class PlayScene extends Phaser.Scene {
     this.triggerGameOver(player);
   }
 
+  onPlayerHitEnemyBullet(player, bullet) {
+    if (this.gameOver || !bullet.active || this.isChoosingUpgrade) return;
+    this.recycleEnemyBullet(bullet);
+    if (this.shieldCharges > 0) {
+      this.shieldFlashIndex = this.shieldCharges - 1;
+      this.shieldFlashUntil = this.time.now + 220;
+      this.shieldCharges -= 1;
+      this.audio?.playShieldAbsorb();
+      this.updateHud();
+      return;
+    }
+    this.triggerGameOver(player);
+  }
+
   recycleBullet(bullet) {
     this.bullets.killAndHide(bullet);
+    bullet.body.stop();
+    bullet.body.checkCollision.none = true;
+  }
+
+  recycleEnemyBullet(bullet) {
+    this.enemyBullets.killAndHide(bullet);
     bullet.body.stop();
     bullet.body.checkCollision.none = true;
   }
@@ -1798,9 +2017,8 @@ export default class PlayScene extends Phaser.Scene {
     this.audio?.stopMusic();
     if (this.shieldRingG) this.shieldRingG.clear();
 
-    if (this.spawnTimer) this.spawnTimer.remove(false);
     if (this.fireTimer) this.fireTimer.remove(false);
-    if (this.upgradeTimer) this.upgradeTimer.remove(false);
+    this.waveManager?.setPaused(true);
 
     if (this.upgradeModal) {
       this.upgradeModal.destroy(true);
