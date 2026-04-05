@@ -65,7 +65,7 @@ async function startGame() {
     // Keep nudging AudioContext awake on every gesture until running (covers tab focus / odd mobile states).
     const domUnlockOpts = { capture: true, passive: true };
     const domAudioNudge = () => {
-      void audio.resume();
+      audio.unlockSyncFromUserGesture();
     };
     document.addEventListener('touchstart', domAudioNudge, domUnlockOpts);
     document.addEventListener('pointerdown', domAudioNudge, domUnlockOpts);

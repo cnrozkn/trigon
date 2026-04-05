@@ -1,7 +1,5 @@
 import * as Phaser from 'phaser';
 import { loadGameProfile } from '../utils/Storage.js';
-import { resumeMenuAudioWithTimeout } from '../audio/menuUnlock.js';
-import { attachMenuInputLayer } from '../ui/menuInputLayer.js';
 
 export default class Menu extends Phaser.Scene {
   constructor() {
@@ -131,16 +129,15 @@ export default class Menu extends Phaser.Scene {
     this.onResize = (gameSize) => this.layoutMenu(gameSize.width, gameSize.height);
     this.scale.on('resize', this.onResize);
 
-    this.detachMenuInputLayer = attachMenuInputLayer(this);
-
-    this.onGlobalPointerDown = () => void this.startGameFromMenu();
+    this.onGlobalPointerDown = () => {
+      if (this.audio && this.audio.unlockSyncFromUserGesture) {
+        this.audio.unlockSyncFromUserGesture();
+      }
+      void this.startGameFromMenu();
+    };
     this.input.on('pointerdown', this.onGlobalPointerDown);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      if (typeof this.detachMenuInputLayer === 'function') {
-        this.detachMenuInputLayer();
-        this.detachMenuInputLayer = null;
-      }
       this.input.off('pointerdown', this.onGlobalPointerDown);
       this.scale.off('resize', this.onResize);
       if (this.ambient) this.ambient.destroy();
@@ -155,12 +152,7 @@ export default class Menu extends Phaser.Scene {
     this.hasStarted = true;
 
     if (this.audio) {
-      try {
-        const ok = await resumeMenuAudioWithTimeout(this.audio);
-        if (ok) this.audio.playUpgradeSelect();
-      } catch (_err) {
-        // Keep transition resilient even if audio unlock fails.
-      }
+      this.audio.playUpgradeSelect();
     }
     if (this.scene.isActive('Menu')) this.scene.start('PlayScene');
   }

@@ -253,7 +253,7 @@ Aşama 7: iOS & Android Canlıya Çıkış   → Mağaza yayını ve native ente
 **Mevcut:** İnce statik çerçeve.
 
 **Yapılacaklar:**
-- [x] Çerçeve köşelerinde küçük neon accent noktalar (parlayan köşe markerlar)
+
 - [x] Level atlandığında çerçevenin kısa bir pulse animasyonu (lineWidth 2 → 4 → 2, 300ms)
 
 ### 1.7 Menu Ekranı Polish
@@ -350,12 +350,7 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
 
 **Yapılacaklar:**
 - [x] **Level göstergesi:** Sol üstte "LV.5" gibi seviye numarası
-- [x] **Kill progress bar:** Level göstergesinin altında ince bar (killsThisLevel / KILLS_PER_LEVEL)
-  - Bar dolduğunda flash efekti
-  - Renk: seviye rengine uygun
-- [x] **Shield göstergesi:** Sol altta kalkan simgeleri (dolu/boş)
-  - Her shield charge için küçük mavi daire
-  - Charge kullanılınca → kırmızı flash + kaybolma
+
 - [x] **Combo sayacı:** Ekranın ortasında büyük font (aktif combo sırasında)
   - "×3" "×5" "×10" gibi büyüyen gösterim
   - Combo bitmeden görünür, bitince fade-out
@@ -525,7 +520,7 @@ Tüm sesler oscillator + gain + filter ile kod içinde üretilir:
     spawnPattern: 'sequential' | 'burst' | 'sides' | 'v_formation'
   }
   ```
-- [x] **Wave arası mola:** 2-3 saniye "WAVE 2/4" göstergesi ile nefes alma
+
 - [x] **Wave clear bonus:** Tüm wave temizlenince +100 bonus skor + patlama efekti
 - [x] **Level clear:** Son wave (boss dahil) temizlenince upgrade seçimi + büyük "LEVEL CLEAR!" animasyonu
 - [x] Spawn pattern'leri:

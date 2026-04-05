@@ -1935,9 +1935,12 @@ export default class PlayScene extends Phaser.Scene {
       this.applySplashDamage(enemy, splash);
     }
     if (pierceLeft > 0) {
+      const vx = bullet.body.velocity.x;
+      const vy = bullet.body.velocity.y;
       bullet.setData('pierceLeft', Math.max(0, pierceLeft - 1));
       bullet.y -= 14;
       bullet.body.reset(bullet.x, bullet.y);
+      bullet.setVelocity(vx, vy);
       bullet.body.checkCollision.none = true;
       this.time.delayedCall(BULLET_PIERCE_IFRAME_MS, () => {
         if (bullet.active) bullet.body.checkCollision.none = false;
