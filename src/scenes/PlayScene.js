@@ -3,6 +3,11 @@ import { loadGameProfile, saveGameProfile } from '../utils/Storage.js';
 import WaveManager from '../systems/WaveManager.js';
 import PowerupSystem from '../systems/PowerupSystem.js';
 import { buildEnemyConfig } from '../systems/EnemyFactory.js';
+import {
+  applyGameOverCombatCleanup,
+  computeBulletTrailIntervalMs,
+  isGameplayActionPaused,
+} from '../systems/combatRuntime.js';
 
 const START_PLAYER_COUNT = 1;
 const MAX_PLAYER_COUNT = 6;
@@ -12,6 +17,18 @@ const MIN_FIRE_MS = 120;
 
 const DRAFT_REROLLS = 2;
 const COMBO_WINDOW_MS = 2500;
+const FEVER_STREAK_THRESHOLD = 60;
+const FEVER_DURATION_MS = 8000;
+const FEVER_COOLDOWN_MS = 1500;
+const NEAR_MISS_RADIUS_PX = 30;
+const NEAR_MISS_COOLDOWN_MS = 650;
+const LEVEL_CLEAR_RETRY_MS = 500;
+const DEATH_ORB_LIFETIME_MS = 1700;
+const DEATH_ORB_BASE_SPEED = 210;
+const DEATH_ORB_ARM_DELAY_MS = 120;
+const BULLET_HIT_LOCK_MS = 45;
+const BULLET_PIERCE_IFRAME_MS = 36;
+const BOSS_BASE_ATTACK_MS = 1650;
 
 /** Inner playfield inset from logical screen edges (enemy bounce + frame). */
 const PLAYFIELD_MARGIN = 22;
@@ -41,6 +58,12 @@ const UPGRADE_DEFS = [
   { key: 'frost', label: 'Frost Rounds', desc: 'Hit can slow enemy', rarity: 'Epic', weight: 1, color: 0x66e6ff },
 ];
 
+const ENDLESS_UPGRADE_DEFS = [
+  { key: 'endlessOverclock', label: 'Overclock Loop', desc: 'Slightly faster fire rate', rarity: 'Rare', weight: 2, color: 0x44ddaa, repeatable: true },
+  { key: 'endlessBounty', label: 'Bounty Protocol', desc: 'Small permanent score gain', rarity: 'Common', weight: 5, color: 0xffd36a, repeatable: true },
+  { key: 'endlessCloseCall', label: 'Close Call Engine', desc: 'Near-miss rewards improve', rarity: 'Epic', weight: 2, color: 0xff99cc, repeatable: true },
+];
+
 function playerTintForLevel(level) {
   if (level < 5) return 0xffffff;
   if (level < 10) return 0x00ff88;
@@ -56,9 +79,15 @@ function enemyColorForLevel(level) {
 }
 
 function enemySpeedMultiplier(level) {
-  if (level <= 4) return 0.95 + (level - 1) * 0.08;
-  if (level <= 10) return 1.19 + (level - 4) * 0.13;
-  return 1.97 + (level - 10) * 0.18;
+  return 0.8 + 2.2 / (1 + Math.exp(-0.25 * (level - 8)));
+}
+
+function regularEnemySpeedMultiplier(level) {
+  if (level <= 2) return 1;
+  if (level <= 6) return 1 + (level - 2) * 0.052;
+  if (level <= 12) return 1.208 + (level - 6) * 0.043;
+  if (level <= 15) return 1.48 + (level - 12) * 0.05;
+  return Math.min(2.45, 1.63 + (level - 15) * 0.075);
 }
 
 function backgroundToneForLevel(level) {
@@ -103,6 +132,7 @@ export default class PlayScene extends Phaser.Scene {
     this.draftRerollsLeft = 0;
     this.draftChoices = [];
     this.upgradePicking = false;
+    this.nextLevelFlowRetryAt = 0;
 
     this.playLeft = PLAYFIELD_MARGIN;
     this.playRight = 0;
@@ -116,6 +146,8 @@ export default class PlayScene extends Phaser.Scene {
     this.bgGridNear = null;
     this.bgTargetTone = backgroundToneForLevel(1);
     this.bgCurrentTone = this.bgTargetTone;
+    this.feverEdgeGlow = null;
+    this.lowShieldVignette = null;
 
     this.trailLastAt = 0;
     this.prevFormationX = 0;
@@ -134,9 +166,20 @@ export default class PlayScene extends Phaser.Scene {
     this.killStreak = 0;
     this.lastKillAt = 0;
     this.maxCombo = 0;
+    this.comboTier = 0;
+    this.comboScoreMultiplier = 1;
+    this.nearMissStreak = 0;
+    this.nearMissLastAt = 0;
+    this.feverActive = false;
+    this.feverEndsAt = 0;
+    this.feverCooldownUntil = 0;
     this.runKills = 0;
     this.runStartMs = 0;
     this.selectedUpgrades = [];
+    this.endlessFireFactor = 1;
+    this.endlessScoreBonus = 0;
+    this.endlessNearMissBonus = 0;
+    this.endlessPicks = 0;
 
     this.pauseButton = null;
     this.pauseOverlay = null;
@@ -159,7 +202,7 @@ export default class PlayScene extends Phaser.Scene {
     this.hudLevel = null;
     this.hudWave = null;
     this.hudCombo = null;
-    this.hudShields = null;
+    this.hudFever = null;
     this.progressBarBg = null;
     this.progressBarFill = null;
     this.powerupBarBg = null;
@@ -185,18 +228,6 @@ export default class PlayScene extends Phaser.Scene {
     g.strokeRect(this.playLeft + 1, 6, this.playRight - this.playLeft - 2, height - 12);
     g.lineStyle(1, 0x223355, 0.35);
     g.strokeRect(this.playLeft + 3, 8, this.playRight - this.playLeft - 6, height - 16);
-    const corners = [
-      [this.playLeft + 8, 14],
-      [this.playRight - 8, 14],
-      [this.playLeft + 8, height - 14],
-      [this.playRight - 8, height - 14],
-    ];
-    corners.forEach(([x, y]) => {
-      g.fillStyle(0x66cfff, 0.9);
-      g.fillCircle(x, y, 2.6);
-      g.fillStyle(0xffffff, 0.4);
-      g.fillCircle(x, y, 1.2);
-    });
     this.playfieldFrame = g;
   }
 
@@ -255,22 +286,18 @@ export default class PlayScene extends Phaser.Scene {
     this.targetFormationX = Phaser.Math.Clamp(this.targetFormationX, minX, maxX);
     this.relayoutFleet();
 
-    this.hudScore.setPosition(16, 16);
-    if (this.hudLevel) this.hudLevel.setPosition(16, 40);
-    if (this.hudWave) this.hudWave.setPosition(16, 60);
-    if (this.progressBarBg) this.progressBarBg.setPosition(74, 66);
-    if (this.progressBarFill) this.progressBarFill.setPosition(74, 66);
-    if (this.powerupBarBg) this.powerupBarBg.setPosition(74, 80);
-    if (this.powerupBarFill) this.powerupBarFill.setPosition(74, 80);
-    if (this.powerupBarText) this.powerupBarText.setPosition(16, 80);
+    this.layoutTopHud();
     if (this.hudCombo) this.hudCombo.setPosition(width * 0.5, 88);
+    if (this.hudFever) this.hudFever.setPosition(width * 0.5, 128);
     if (this.pauseButton) this.pauseButton.setPosition(width - 24, 24);
-    if (this.hudShields) this.drawHudShields();
 
     if (this.overlayBg) {
       this.overlayBg.setPosition(width * 0.5, height * 0.5);
       this.overlayBg.setSize(width, height);
     }
+    if (this.screenFlash) this.screenFlash.setPosition(width * 0.5, height * 0.5).setSize(width, height);
+    if (this.feverEdgeGlow) this.feverEdgeGlow.setPosition(width * 0.5, height * 0.5).setSize(width, height);
+    if (this.lowShieldVignette) this.lowShieldVignette.setPosition(width * 0.5, height * 0.64).setSize(width * 1.3, height * 1.7);
     if (this.isPausedByUser) this.renderPauseOverlay();
     if (this.isGameOverScreenVisible) this.renderGameOverOverlay();
     if (this.onboardingActive) this.renderOnboardingStep();
@@ -278,7 +305,12 @@ export default class PlayScene extends Phaser.Scene {
     this.enemies.children.iterate((e) => {
       if (!e || !e.active) return true;
       e.x = Phaser.Math.Clamp(e.x, this.playLeft + 12, this.playRight - 12);
-      if (e.body) e.body.reset(e.x, e.y);
+      if (e.body) {
+        const prevVx = e.body.velocity.x;
+        const prevVy = e.body.velocity.y;
+        e.body.reset(e.x, e.y);
+        e.body.setVelocity(prevVx, prevVy);
+      }
       return true;
     });
 
@@ -290,9 +322,12 @@ export default class PlayScene extends Phaser.Scene {
     this.ensureStageOneTextures();
     this.createBackgroundLayer(width, height);
     this.audio = this.registry.get('audio') || null;
-    this.audio?.startMusic();
-    this.syncAudioSceneState();
-
+    // Fallback unlock: menu tap should already resume; this covers slow resume or suspended tab.
+    if (this.audio && typeof this.audio.resume === 'function') {
+      this.input.once('pointerdown', () => {
+        void this.audio.resume();
+      });
+    }
     this.applyPlayfieldWorldBounds(width, height);
     this.drawPlayfieldFrame(width, height);
 
@@ -373,53 +408,56 @@ export default class PlayScene extends Phaser.Scene {
       .rectangle(width * 0.5, height * 0.5, width, height, 0xffffff, 0)
       .setDepth(260)
       .setVisible(false);
+    this.feverEdgeGlow = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0xff66dd, 0).setDepth(150);
+    this.lowShieldVignette = this.add.ellipse(width * 0.5, height * 0.64, width * 1.3, height * 1.7, 0xff4455, 0).setDepth(140);
 
     for (let i = 0; i < START_PLAYER_COUNT; i++) this.addPlayerToFleet();
 
     this.hudScore = this.add
-      .text(16, 16, 'Score: 0', {
+      .text(16, 18, 'Score: 0', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '18px',
         color: '#aaffff',
       })
+      .setOrigin(0, 0.5)
       .setDepth(100);
     this.hudLevel = this.add
-      .text(16, 40, 'LV.1', {
+      .text(16, 18, 'LV.1', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '15px',
         fontStyle: 'bold',
         color: '#ccddff',
       })
+      .setOrigin(0, 0.5)
       .setDepth(100);
     this.hudWave = this.add
-      .text(16, 60, 'WAVE 0/0', {
+      .text(16, 18, 'WAVE 0/0', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '13px',
         fontStyle: 'bold',
         color: '#9fd6ff',
       })
+      .setOrigin(0, 0.5)
       .setDepth(100);
-    this.progressBarBg = this.add.rectangle(74, 66, 112, 8, 0x172236, 0.95).setDepth(100).setOrigin(0, 0.5);
-    this.progressBarFill = this.add.rectangle(74, 66, 112, 8, 0x66cfff, 1).setDepth(101).setOrigin(0, 0.5);
-    this.powerupBarBg = this.add.rectangle(74, 80, 112, 6, 0x122430, 0.9).setDepth(100).setOrigin(0, 0.5);
-    this.powerupBarFill = this.add.rectangle(74, 80, 0, 6, 0xffcc66, 0.95).setDepth(101).setOrigin(0, 0.5);
-    this.powerupBarText = this.add
-      .text(16, 80, '', {
-        fontFamily: 'ui-monospace, monospace',
-        fontSize: '11px',
-        color: '#ffe8af',
-      })
-      .setDepth(101);
-    this.hudShields = this.add.graphics().setDepth(100);
     this.hudCombo = this.add
       .text(width * 0.5, 88, 'x0', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '30px',
+        fontSize: '34px',
         fontStyle: 'bold',
         color: '#ffe080',
       })
       .setOrigin(0.5)
       .setDepth(110)
+      .setAlpha(0);
+    this.hudFever = this.add
+      .text(width * 0.5, 128, 'FEVER!', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '40px',
+        fontStyle: 'bold',
+        color: '#ff78ff',
+      })
+      .setOrigin(0.5)
+      .setDepth(112)
       .setAlpha(0);
     this.pauseButton = this.add
       .text(width - 24, 24, '||', {
@@ -451,7 +489,7 @@ export default class PlayScene extends Phaser.Scene {
     this.powerupSystem.create();
     this.waveManager = new WaveManager(this, {
       onSpawn: (spawn, wave) => this.spawnFromWave(spawn, wave),
-      onWaveStart: (ctx) => this.onWaveStarted(ctx),
+      onWaveStart: (ctx, wave) => this.onWaveStarted(ctx, wave),
       onWaveClear: (ctx) => this.onWaveCleared(ctx),
       onLevelClear: (ctx) => this.onLevelCleared(ctx),
     });
@@ -489,20 +527,23 @@ export default class PlayScene extends Phaser.Scene {
       }
       this.waveManager = null;
       this.powerupSystem = null;
-      this.audio?.setSceneState({ level: this.currentLevel, isBoss: false, inUpgrade: false });
     });
   }
 
   update(_time, delta) {
     this.updateBackgroundFx(delta);
-    // Keep drop cleanup active even when gameplay is paused by overlays.
-    this.powerupSystem?.update(this.time.now);
-    if (this.gameOver || this.isChoosingUpgrade || this.isPausedByUser || this.onboardingActive) return;
-    this.waveManager?.update(delta);
-    if (this.killStreak > 0 && this.time.now - this.lastKillAt > COMBO_WINDOW_MS) {
-      this.killStreak = 0;
-      this.updateComboHud();
+    const gameplayPaused = isGameplayActionPaused(this);
+    // Keep pickup cleanup active even when gameplay is paused by overlays.
+    this.powerupSystem?.update(this.time.now, { timersPaused: gameplayPaused });
+    if (gameplayPaused) return;
+    if (this.levelClearPending && this.time.now >= this.nextLevelFlowRetryAt) {
+      this.nextLevelFlowRetryAt = this.time.now + LEVEL_CLEAR_RETRY_MS;
+      this.tryOpenLevelTransition();
     }
+    this.waveManager?.update(delta);
+    if (this.feverActive && this.time.now >= this.feverEndsAt) this.endFeverMode();
+    if (this.killStreak > 0 && this.time.now - this.lastKillAt > COMBO_WINDOW_MS) this.onComboBreak();
+    if (this.killStreak > 1) this.updateComboHud();
 
     const { width } = this.scale;
     const minX = this.playLeft + this.playerHalfSpread;
@@ -554,9 +595,15 @@ export default class PlayScene extends Phaser.Scene {
           e.setVelocityX(vx);
           e.setVelocityY((baseVy + 24) * enemySpeedMultiplier(this.currentLevel) * slowFactor);
         }
+        const nextBossAttackAt = e.getData('nextBossAttackAt') || 0;
+        if (this.time.now >= nextBossAttackAt) {
+          this.fireBossAttackPattern(e);
+          const attackCadence = Math.max(720, BOSS_BASE_ATTACK_MS - this.currentLevel * 26);
+          e.setData('nextBossAttackAt', this.time.now + attackCadence);
+        }
       } else {
         const baseVy = e.getData('baseVy') || 45;
-        const vy = baseVy * slowFactor;
+        const vy = baseVy * slowFactor * regularEnemySpeedMultiplier(this.currentLevel);
         if (enemyType === 'zigzag') {
           const t = this.time.now * 0.001;
           const amp = e.getData('zigzagAmp') || 100;
@@ -572,7 +619,10 @@ export default class PlayScene extends Phaser.Scene {
             const nextShootAt = e.getData('nextShootAt') || 0;
             if (this.time.now >= nextShootAt) {
               this.spawnEnemyBulletAtPlayer(e.x, e.y + 18);
-              e.setData('nextShootAt', this.time.now + (e.getData('shootEveryMs') || 2000));
+              const baseShootMs = e.getData('shootEveryMs') || 2000;
+              const cadenceScale = 1 + Math.max(0, this.currentLevel - 2) * 0.035;
+              const shootDelay = Math.max(900, Math.round(baseShootMs / cadenceScale));
+              e.setData('nextShootAt', this.time.now + shootDelay);
             }
           }
         } else {
@@ -583,15 +633,32 @@ export default class PlayScene extends Phaser.Scene {
       return true;
     });
 
+    const activeBulletCount = this.bullets?.countActive?.(true) ?? 0;
+    const trailIntervalMs = computeBulletTrailIntervalMs({
+      activeBulletCount,
+      feverActive: this.feverActive,
+    });
     this.bullets.children.iterate((b) => {
       if (b && b.active) {
         if (b.y < -55) this.recycleBullet(b);
-        else this.emitBulletTrail(b);
+        else this.emitBulletTrail(b, trailIntervalMs);
       }
       return true;
     });
     this.enemyBullets.children.iterate((b) => {
       if (!b || !b.active) return true;
+      if (b.getData('isDeathOrb')) {
+        const orbUntil = b.getData('deathOrbUntil') || 0;
+        if (this.time.now >= orbUntil) {
+          this.recycleEnemyBullet(b);
+          return true;
+        }
+        const pulse = 1.55 + (Math.sin(this.time.now * 0.018 + b.x * 0.03) + 1) * 0.22;
+        b.setScale(pulse);
+        if (!b.body.checkCollision.none) {
+          b.setAlpha(0.75 + (Math.sin(this.time.now * 0.02) + 1) * 0.12);
+        }
+      }
       if (
         b.y > this.scale.height + 55 ||
         b.y < -55 ||
@@ -609,12 +676,11 @@ export default class PlayScene extends Phaser.Scene {
     });
     this.drawShieldRings();
     this.prevFormationX = this.formationX;
-    this.updateProgressBar();
-    this.updatePowerupHud();
+    this.checkNearMisses();
   }
 
   updateBackgroundFx(delta = 16.6) {
-    this.bgTargetTone = backgroundToneForLevel(this.currentLevel);
+    this.bgTargetTone = this.feverActive ? 0x3a0f46 : backgroundToneForLevel(this.currentLevel);
     this.bgCurrentTone = Phaser.Display.Color.Interpolate.ColorWithColor(
       Phaser.Display.Color.ValueToColor(this.bgCurrentTone),
       Phaser.Display.Color.ValueToColor(this.bgTargetTone),
@@ -622,12 +688,33 @@ export default class PlayScene extends Phaser.Scene {
       4,
     ).color;
 
-    if (this.bgTone) this.bgTone.setFillStyle(this.bgCurrentTone, 0.38);
+    if (this.bgTone) this.bgTone.setFillStyle(this.bgCurrentTone, this.feverActive ? 0.52 : 0.38);
     if (this.bgGridFar) this.bgGridFar.tilePositionY -= (18 * delta) / 1000;
     if (this.bgGridNear) this.bgGridNear.tilePositionY -= (11 * delta) / 1000;
     if (this.bgGlow) {
-      const pulse = 0.03 + (Math.sin(this.time.now * 0.00072) + 1) * 0.025;
+      const pulse = this.feverActive
+        ? 0.09 + (Math.sin(this.time.now * 0.0012) + 1) * 0.05
+        : 0.03 + (Math.sin(this.time.now * 0.00072) + 1) * 0.025;
       this.bgGlow.setAlpha(pulse);
+      this.bgGlow.setFillStyle(this.feverActive ? 0xff44ee : 0x4a3d88, 1);
+    }
+    if (this.feverEdgeGlow) {
+      const edgePulse = this.feverActive ? 0.1 + (Math.sin(this.time.now * 0.0028) + 1) * 0.06 : 0;
+      this.feverEdgeGlow.setAlpha(edgePulse);
+    }
+    if (this.hudFever) {
+      if (this.feverActive) {
+        this.hudFever.setAlpha(0.75 + (Math.sin(this.time.now * 0.01) + 1) * 0.1);
+        this.hudFever.setScale(1 + Math.sin(this.time.now * 0.014) * 0.05);
+      } else {
+        this.hudFever.setAlpha(0);
+        this.hudFever.setScale(1);
+      }
+    }
+    if (this.lowShieldVignette) {
+      const danger = this.shieldCharges === 1 && !this.gameOver && !this.isChoosingUpgrade;
+      const vignetteAlpha = danger ? 0.08 + (Math.sin(this.time.now * 0.0065) + 1) * 0.06 : 0;
+      this.lowShieldVignette.setAlpha(vignetteAlpha);
     }
   }
 
@@ -674,12 +761,12 @@ export default class PlayScene extends Phaser.Scene {
     if (this.muzzleFx) this.muzzleFx.explode(4, x, y);
   }
 
-  emitBulletTrail(bullet) {
+  emitBulletTrail(bullet, intervalMs = 34) {
     if (!this.bulletTrailFx) return;
     const nextAt = bullet.getData('trailAt') || 0;
     if (this.time.now < nextAt) return;
     this.bulletTrailFx.explode(1, bullet.x, bullet.y + 8);
-    bullet.setData('trailAt', this.time.now + 34);
+    bullet.setData('trailAt', this.time.now + intervalMs);
   }
 
   emitImpactBurst(x, y, crit) {
@@ -720,6 +807,47 @@ export default class PlayScene extends Phaser.Scene {
       duration: opts.duration || 420,
       ease: 'Sine.easeOut',
       onComplete: () => popup.destroy(),
+    });
+  }
+
+  checkNearMisses() {
+    const players = this.players?.getChildren?.().filter((p) => p?.active) || [];
+    if (players.length === 0) return;
+    const now = this.time.now;
+    const radiusSq = NEAR_MISS_RADIUS_PX * NEAR_MISS_RADIUS_PX;
+
+    this.enemies.children.iterate((enemy) => {
+      if (!enemy || !enemy.active) return true;
+      const nextAllowedAt = enemy.getData('nearMissLockUntil') || 0;
+      if (nextAllowedAt > now) return true;
+
+      for (let i = 0; i < players.length; i += 1) {
+        const p = players[i];
+        if (this.physics.overlap(p, enemy)) return true;
+        const dx = enemy.x - p.x;
+        const dy = enemy.y - p.y;
+        if (dx * dx + dy * dy > radiusSq) continue;
+
+        enemy.setData('nearMissLockUntil', now + NEAR_MISS_COOLDOWN_MS);
+        if (now - this.nearMissLastAt <= COMBO_WINDOW_MS) this.nearMissStreak += 1;
+        else this.nearMissStreak = 1;
+        this.nearMissLastAt = now;
+
+        const nearMissBase = 50 + this.endlessNearMissBonus;
+        const gained = this.addScaledScore(nearMissBase + Math.min(24, (this.nearMissStreak - 1) * 6));
+        this.showFloatingText(`CLOSE! +${gained}`, enemy.x, enemy.y - 16, {
+          color: '#ffbb55',
+          size: 16,
+          duration: 400,
+          scaleFrom: 0.88,
+        });
+        this.showQuickFlash(0.15, 30);
+        this.audio?.playNearMissWhoosh?.();
+        this.lastKillAt = now;
+        this.updateHud();
+        break;
+      }
+      return true;
     });
   }
 
@@ -770,13 +898,83 @@ export default class PlayScene extends Phaser.Scene {
     }, durationMs);
   }
 
-  syncAudioSceneState() {
-    if (!this.audio) return;
-    this.audio.setSceneState({
-      level: this.currentLevel,
-      isBoss: this.hasActiveBoss(),
-      inUpgrade: this.isChoosingUpgrade,
+  getComboTierInfo(streak = this.killStreak) {
+    if (streak >= FEVER_STREAK_THRESHOLD) return { tier: 4, comboLabel: 'x10', scoreMultiplier: 5, color: '#ff66ee' };
+    if (streak >= 30) return { tier: 3, comboLabel: 'x5', scoreMultiplier: 3, color: '#ff9f66' };
+    if (streak >= 15) return { tier: 2, comboLabel: 'x3', scoreMultiplier: 2, color: '#ffd966' };
+    if (streak >= 5) return { tier: 1, comboLabel: 'x2', scoreMultiplier: 1.5, color: '#bbffcc' };
+    return { tier: 0, comboLabel: 'x1', scoreMultiplier: 1, color: '#ffe080' };
+  }
+
+  getScoreMultiplier() {
+    const chainMultiplier = this.feverActive ? 5 : this.comboScoreMultiplier || 1;
+    return chainMultiplier * (1 + this.endlessScoreBonus);
+  }
+
+  addScaledScore(baseScore) {
+    const amount = Math.round(baseScore * this.getScoreMultiplier());
+    this.score += amount;
+    return amount;
+  }
+
+  showQuickFlash(alpha = 0.22, duration = 80) {
+    if (!this.screenFlash) return;
+    this.screenFlash.setVisible(true).setAlpha(alpha);
+    this.tweens.add({
+      targets: this.screenFlash,
+      alpha: 0,
+      duration,
+      onComplete: () => this.screenFlash?.setVisible(false),
     });
+  }
+
+  showComboTierFlash() {
+    const info = this.getComboTierInfo();
+    this.showFloatingText(`COMBO ${info.comboLabel.toUpperCase()}!`, this.scale.width * 0.5, 122, {
+      color: info.color,
+      size: 28,
+      duration: 650,
+      scaleFrom: 0.72,
+    });
+    this.showQuickFlash(0.18, 90);
+  }
+
+  startFeverMode() {
+    this.feverActive = true;
+    this.feverEndsAt = this.time.now + FEVER_DURATION_MS;
+    this.feverCooldownUntil = this.feverEndsAt + FEVER_COOLDOWN_MS;
+    this.showFloatingText('FEVER!', this.scale.width * 0.5, this.scale.height * 0.38, {
+      color: '#ff77f8',
+      size: 48,
+      duration: 1000,
+      scaleFrom: 0.55,
+    });
+    this.audio?.playFeverStart?.();
+    this.resetFireTimer();
+  }
+
+  endFeverMode() {
+    if (!this.feverActive) return;
+    this.feverActive = false;
+    this.feverEndsAt = 0;
+    this.resetFireTimer();
+  }
+
+  onComboBreak() {
+    if (this.killStreak > 1) {
+      this.showQuickFlash(0.3, 110);
+      this.showFloatingText('COMBO BREAK', this.scale.width * 0.5, 120, {
+        color: '#ff6677',
+        size: 20,
+        duration: 500,
+        scaleFrom: 0.85,
+      });
+      this.audio?.playComboBreak?.();
+    }
+    this.killStreak = 0;
+    this.comboTier = 0;
+    this.comboScoreMultiplier = 1;
+    this.updateComboHud();
   }
 
   updateKillStreakOnKill() {
@@ -785,6 +983,12 @@ export default class PlayScene extends Phaser.Scene {
     else this.killStreak = 1;
     this.lastKillAt = now;
     this.maxCombo = Math.max(this.maxCombo, this.killStreak);
+    const info = this.getComboTierInfo(this.killStreak);
+    const didTierUp = info.tier > this.comboTier;
+    this.comboTier = info.tier;
+    this.comboScoreMultiplier = info.scoreMultiplier;
+    if (didTierUp) this.showComboTierFlash();
+    if (!this.feverActive && this.killStreak >= FEVER_STREAK_THRESHOLD && now >= this.feverCooldownUntil) this.startFeverMode();
     this.updateComboHud();
     this.audio?.playKillStreakNote(this.killStreak);
   }
@@ -831,68 +1035,17 @@ export default class PlayScene extends Phaser.Scene {
       const waveNo = Math.max(0, waveCtx.waveIndex + 1);
       this.hudWave.setText(`WAVE ${waveNo}/${waveCtx.totalWaves}`);
     }
-    this.updateProgressBar();
-    this.updatePowerupHud();
-    this.drawHudShields();
+    this.layoutTopHud();
     this.updateComboHud();
-  }
-
-  updateProgressBar() {
-    if (!this.progressBarFill) return;
-    const ratio = this.waveManager?.getProgressRatio?.() ?? 0;
-    const width = 112;
-    this.progressBarFill.width = Math.max(2, width * ratio);
-    const hue = this.currentLevel < 5 ? 0x66cfff : this.currentLevel < 10 ? 0xaa88ff : this.currentLevel < 15 ? 0xff7799 : 0xffb455;
-    this.progressBarFill.setFillStyle(hue, 1);
-  }
-
-  updatePowerupHud() {
-    if (!this.powerupBarFill || !this.powerupBarText) return;
-    const buffs = this.powerupSystem?.getActiveBuffs?.() || [];
-    if (buffs.length === 0) {
-      this.powerupBarFill.width = 0;
-      this.powerupBarText.setText('');
-      return;
-    }
-    const strongest = buffs.reduce((a, b) => (a.remainingMs > b.remainingMs ? a : b));
-    const ratio = Phaser.Math.Clamp(strongest.remainingMs / strongest.maxMs, 0, 1);
-    this.powerupBarFill.width = Math.max(2, 112 * ratio);
-    this.powerupBarFill.setFillStyle(strongest.key === 'PIERCE' ? 0xffcc66 : 0x88ffcc, 0.95);
-    this.powerupBarText.setText(
-      buffs
-        .map((buff) => `${buff.key}:${Math.ceil(buff.remainingMs / 1000)}s`)
-        .join('  '),
-    );
-  }
-
-  drawHudShields() {
-    if (!this.hudShields) return;
-    this.hudShields.clear();
-    const startX = 20;
-    const y = this.scale.height - 18;
-    const maxIcons = 5;
-    for (let i = 0; i < maxIcons; i++) {
-      const x = startX + i * 14;
-      this.hudShields.fillStyle(0x224466, 0.5);
-      this.hudShields.fillCircle(x, y, 4.8);
-    }
-    for (let i = 0; i < this.shieldCharges; i++) {
-      const x = startX + i * 14;
-      this.hudShields.fillStyle(0x77bbff, 0.9);
-      this.hudShields.fillCircle(x, y, 4.8);
-    }
-    if (this.shieldFlashUntil > this.time.now && this.shieldFlashIndex >= 0) {
-      const x = startX + this.shieldFlashIndex * 14;
-      const ratio = Phaser.Math.Clamp((this.shieldFlashUntil - this.time.now) / 220, 0, 1);
-      this.hudShields.fillStyle(0xff5566, 0.35 + ratio * 0.55);
-      this.hudShields.fillCircle(x, y, 5.8);
-    }
   }
 
   updateComboHud() {
     if (!this.hudCombo) return;
     if (this.killStreak > 1) {
-      this.hudCombo.setText(`x${this.killStreak}`);
+      const info = this.getComboTierInfo();
+      const left = Math.max(0, COMBO_WINDOW_MS - (this.time.now - this.lastKillAt));
+      this.hudCombo.setText(`${info.comboLabel}  STREAK ${this.killStreak}  ${Math.ceil(left / 1000)}s`);
+      this.hudCombo.setColor(info.color);
       this.hudCombo.setAlpha(1);
     } else {
       this.hudCombo.setAlpha(0);
@@ -917,11 +1070,14 @@ export default class PlayScene extends Phaser.Scene {
     if (this.isPausedByUser) {
       this.setPlayflowPaused(true);
       this.renderPauseOverlay();
-      this.overlayBg.setVisible(true).setAlpha(0.5);
+      this.overlayBg.setVisible(true).setAlpha(0.68);
     } else {
       if (this.pauseOverlay) this.pauseOverlay.setVisible(false);
       this.overlayBg.setVisible(false).setAlpha(0);
       this.setPlayflowPaused(false);
+      if (this.levelClearPending && !this.gameOver && !this.isChoosingUpgrade) {
+        this.time.delayedCall(80, () => this.tryOpenLevelTransition());
+      }
     }
   }
 
@@ -929,7 +1085,10 @@ export default class PlayScene extends Phaser.Scene {
     if (!this.pauseOverlay) return;
     this.pauseOverlay.removeAll(true);
     const { width, height } = this.scale;
-    const audioSettings = this.audio?.getSettings?.() || { sfxVolume: 0.85, musicVolume: 0.65 };
+    const audioSettings = this.audio?.getSettings?.() || { sfxVolume: 0.85 };
+    const panel = this.add
+      .rectangle(width * 0.5, height * 0.53, width * 0.84, height * 0.62, 0x0c1220, 0.93)
+      .setStrokeStyle(2, 0x5d84b6, 0.9);
 
     const title = this.add
       .text(width * 0.5, height * 0.32, 'PAUSED', {
@@ -998,18 +1157,15 @@ export default class PlayScene extends Phaser.Scene {
       return [title, bg, fill, knob, pct];
     };
 
-    const sfxSliderItems = createVolumeSlider('SFX', height * 0.435, audioSettings.sfxVolume ?? 0.85, (v) => {
+    const sfxSliderItems = createVolumeSlider('SFX', height * 0.455, audioSettings.sfxVolume ?? 0.85, (v) => {
       this.audio?.setSfxVolume(v);
     });
-    const musicSliderItems = createVolumeSlider('Music', height * 0.485, audioSettings.musicVolume ?? 0.65, (v) => {
-      this.audio?.setMusicVolume(v);
-    });
 
-    const resume = makeBtn('Resume', height * 0.57, () => this.togglePauseByUser());
-    const restart = makeBtn('Restart', height * 0.64, () => this.scene.restart());
+    const resume = makeBtn('Resume', height * 0.56, () => this.togglePauseByUser());
+    const restart = makeBtn('Restart', height * 0.635, () => this.scene.restart());
     const menu = makeBtn('Menu', height * 0.71, () => this.scene.start('Menu'));
 
-    this.pauseOverlay.add([title, ...sfxSliderItems, ...musicSliderItems, resume, restart, menu]);
+    this.pauseOverlay.add([panel, title, ...sfxSliderItems, resume, restart, menu]);
     this.pauseOverlay.setVisible(true);
   }
 
@@ -1028,16 +1184,16 @@ export default class PlayScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const steps = [
       {
-        title: 'Hareket',
-        body: 'Hareket ettirmek icin surukle.',
+        title: 'Move',
+        body: 'Drag to move your fleet.',
       },
       {
-        title: 'Ates',
-        body: 'Gemin otomatik ates eder.',
+        title: 'Fire',
+        body: 'Your fleet fires automatically.',
       },
       {
-        title: 'Kacin',
-        body: 'Dusmanlarla carpisma. Hayatta kal.',
+        title: 'Dodge',
+        body: 'Avoid colliding with enemies. Stay alive.',
       },
     ];
     const step = steps[this.onboardingIndex] || steps[steps.length - 1];
@@ -1060,7 +1216,7 @@ export default class PlayScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     const indicator = this.add
-      .text(width * 0.5, height * 0.67, `Adim ${this.onboardingIndex + 1}/3 - Dokun gec`, {
+      .text(width * 0.5, height * 0.67, `Step ${this.onboardingIndex + 1}/3 — Tap to continue`, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '14px',
         color: '#9db2cc',
@@ -1125,9 +1281,20 @@ export default class PlayScene extends Phaser.Scene {
     const run = result.run;
     const profile = result.profile;
     const upgrades = run.selectedUpgrades.length > 0 ? run.selectedUpgrades.join(', ') : '-';
+    const panelWidth = Math.min(width * 0.9, 560);
+    const panelHeight = Math.min(height * 0.78, 620);
+    const panelX = (width - panelWidth) * 0.5;
+    const panelY = Math.max(24, height * 0.1);
+    const panelBottom = panelY + panelHeight;
+
+    const panel = this.add.graphics();
+    panel.fillStyle(0x0b1020, 0.9);
+    panel.lineStyle(2, 0x5c8fcf, 0.72);
+    panel.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, 20);
+    panel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 20);
 
     const title = this.add
-      .text(width * 0.5, height * 0.2, 'GAME OVER', {
+      .text(width * 0.5, panelY + 74, 'GAME OVER', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '46px',
         fontStyle: 'bold',
@@ -1146,18 +1313,18 @@ export default class PlayScene extends Phaser.Scene {
     ];
 
     const stats = this.add
-      .text(width * 0.5, height * 0.42, lines.join('\n'), {
+      .text(width * 0.5, panelY + panelHeight * 0.5, lines.join('\n'), {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '18px',
         color: '#e6f1ff',
         align: 'center',
         lineSpacing: 6,
-        wordWrap: { width: width * 0.85 },
+        wordWrap: { width: panelWidth - 46 },
       })
       .setOrigin(0.5);
 
     const retry = this.add
-      .text(width * 0.5, height * 0.72, 'Tap to Retry', {
+      .text(width * 0.5, panelBottom - 86, 'Tap to Retry', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '26px',
         fontStyle: 'bold',
@@ -1168,7 +1335,7 @@ export default class PlayScene extends Phaser.Scene {
       .on('pointerdown', () => this.scene.restart());
 
     const menu = this.add
-      .text(width * 0.5, height * 0.79, 'Menu', {
+      .text(width * 0.5, panelBottom - 42, 'Menu', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '20px',
         color: '#cce0ff',
@@ -1177,18 +1344,39 @@ export default class PlayScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.scene.start('Menu'));
 
-    this.gameOverOverlay.add([title, stats, retry, menu]);
+    this.gameOverOverlay.add([panel, title, stats, retry, menu]);
     this.gameOverOverlay.setVisible(true);
   }
 
+  layoutTopHud() {
+    if (!this.hudScore || !this.hudLevel || !this.hudWave) return;
+    const topY = 18;
+    const leftX = 16;
+    const gap = 14;
+    this.hudScore.setPosition(leftX, topY);
+    const levelX = leftX + this.hudScore.width + gap;
+    this.hudLevel.setPosition(levelX, topY);
+    const waveX = levelX + this.hudLevel.width + gap;
+    this.hudWave.setPosition(waveX, topY);
+  }
+
   getCurrentFireDelay() {
-    const levelReduction = Math.floor((this.currentLevel - 1) / 2) * 16;
+    const levelReduction = Math.floor((this.currentLevel - 1) / 2) * 12;
     const upgradeReduction = this.fireRateLevel * 28;
-    return Math.max(MIN_FIRE_MS, BASE_FIRE_MS - levelReduction - upgradeReduction);
+    const scaled = Math.round((BASE_FIRE_MS - levelReduction - upgradeReduction) * this.endlessFireFactor);
+    const baseDelay = Math.max(MIN_FIRE_MS, scaled);
+    if (!this.feverActive) return baseDelay;
+    return Math.max(MIN_FIRE_MS, Math.round(baseDelay / 1.5));
   }
 
   getCurrentEnemySpawnDelay() {
     return 0;
+  }
+
+  tryOpenLevelTransition() {
+    if (!this.levelClearPending || this.gameOver) return;
+    if (this.isChoosingUpgrade || this.onboardingActive || this.isPausedByUser) return;
+    this.openUpgradeSelection();
   }
 
   getCritChance() {
@@ -1209,6 +1397,7 @@ export default class PlayScene extends Phaser.Scene {
     if (key === 'crit') return this.critLevel < max;
     if (key === 'frost') return this.frostLevel < max;
     if (key === 'shield') return this.shieldCharges < max;
+    if (key === 'endlessOverclock' || key === 'endlessBounty' || key === 'endlessCloseCall') return true;
     return true;
   }
 
@@ -1221,20 +1410,31 @@ export default class PlayScene extends Phaser.Scene {
     if (key === 'crit') return this.critLevel;
     if (key === 'frost') return this.frostLevel;
     if (key === 'shield') return this.shieldCharges;
+    if (key === 'endlessOverclock' || key === 'endlessBounty' || key === 'endlessCloseCall') return this.endlessPicks;
     return 0;
   }
 
   getStackLabelForCard(def) {
+    if (def.repeatable) {
+      const cur = this.getUpgradeCurrentValue(def.key);
+      return `Lv.${cur} → Lv.${cur + 1}`;
+    }
     const max = UPGRADE_MAX[def.key];
     const cur = this.getUpgradeCurrentValue(def.key);
     const next = Math.min(max, cur + 1);
     return `${cur}/${max} → ${next}/${max}`;
   }
 
-  pickUpgradeChoices(count, banished = new Set(), excludeKeys = new Set()) {
-    const pool = UPGRADE_DEFS.filter(
+  getAvailableUpgradePool(banished = new Set(), excludeKeys = new Set()) {
+    const regular = UPGRADE_DEFS.filter(
       (u) => this.canOfferUpgrade(u.key) && !banished.has(u.key) && !excludeKeys.has(u.key),
     );
+    if (regular.length > 0) return regular;
+    return ENDLESS_UPGRADE_DEFS.filter((u) => !banished.has(u.key) && !excludeKeys.has(u.key));
+  }
+
+  pickUpgradeChoices(count, banished = new Set(), excludeKeys = new Set()) {
+    const pool = this.getAvailableUpgradePool(banished, excludeKeys);
     const picked = [];
 
     while (picked.length < count && pool.length > 0) {
@@ -1261,11 +1461,9 @@ export default class PlayScene extends Phaser.Scene {
     let picked = this.pickUpgradeChoices(1, banished, excludeKeys);
     if (picked.length > 0) return picked[0];
 
-    let pool = UPGRADE_DEFS.filter(
-      (u) => this.canOfferUpgrade(u.key) && !excludeKeys.has(u.key) && !banished.has(u.key),
-    );
+    let pool = this.getAvailableUpgradePool(banished, excludeKeys);
     if (pool.length === 0) {
-      pool = UPGRADE_DEFS.filter((u) => this.canOfferUpgrade(u.key) && !excludeKeys.has(u.key));
+      pool = [...UPGRADE_DEFS, ...ENDLESS_UPGRADE_DEFS].filter((u) => !excludeKeys.has(u.key));
     }
     if (pool.length === 0) return null;
 
@@ -1332,7 +1530,7 @@ export default class PlayScene extends Phaser.Scene {
   spawnFromWave(spawn) {
     const config = buildEnemyConfig(spawn.type, this.currentLevel);
     const x = spawn.x ?? Phaser.Math.Between(this.playLeft + 24, this.playRight - 24);
-    const y = spawn.y ?? -44;
+    const y = spawn.y ?? Math.min(this.scale.height * 0.32, 108);
     const sprite = this.enemies.create(x, y, config.texture);
     if (!sprite) return null;
 
@@ -1373,6 +1571,7 @@ export default class PlayScene extends Phaser.Scene {
     sprite.setData('stopY', config.stopY || 0);
     sprite.setData('shootEveryMs', config.shootEveryMs || 0);
     sprite.setData('nextShootAt', this.time.now + Phaser.Math.Between(500, 1300));
+    sprite.setData('nextBossAttackAt', this.time.now + Phaser.Math.Between(900, 1300));
     sprite.setData('zigzagAmp', config.zigzagAmp || 0);
     sprite.setData('zigzagFreq', config.zigzagFreq || 0);
     sprite.setData('zigzagSeed', Math.random() * Math.PI * 2);
@@ -1415,13 +1614,14 @@ export default class PlayScene extends Phaser.Scene {
     return found;
   }
 
-  onWaveStarted(ctx) {
+  onWaveStarted(ctx, wave) {
     this.hudWave?.setText(`WAVE ${Math.max(1, ctx.waveIndex + 1)}/${ctx.totalWaves}`);
     this.showFloatingText(`WAVE ${Math.max(1, ctx.waveIndex + 1)}/${ctx.totalWaves}`, this.scale.width * 0.5, 92, {
       color: '#bce5ff',
       size: 18,
       duration: 640,
     });
+    if (wave?.kind === 'boss') this.triggerBossIntroFx();
   }
 
   onWaveCleared(ctx) {
@@ -1445,20 +1645,22 @@ export default class PlayScene extends Phaser.Scene {
       duration: 1150,
       scaleFrom: 0.7,
     });
+    this.triggerLevelUpFx();
     this.pulsePlayfieldFrame();
     this.audio?.playLevelUp?.();
+    this.nextLevelFlowRetryAt = this.time.now + 250;
     this.time.delayedCall(780, () => {
-      if (!this.gameOver) this.openUpgradeSelection();
+      if (!this.gameOver) this.tryOpenLevelTransition();
     });
   }
 
   startNextLevel() {
     this.currentLevel += 1;
     this.levelClearPending = false;
+    this.nextLevelFlowRetryAt = 0;
     this.relayoutFleet();
     this.resetFireTimer();
     this.waveManager?.startLevel(this.currentLevel);
-    this.syncAudioSceneState();
     this.updateHud();
   }
 
@@ -1481,7 +1683,38 @@ export default class PlayScene extends Phaser.Scene {
     });
   }
 
-  spawnBullet(x, y, vx = 0) {
+  triggerBossIntroFx() {
+    const cam = this.cameras.main;
+    this.tweens.add({
+      targets: cam,
+      zoom: 1.02,
+      duration: 300,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  triggerBossDeathFx() {
+    this.showQuickFlash(0.42, 140);
+    this.physics.world.timeScale = 0.3;
+    this.time.delayedCall(200, () => {
+      if (!this.gameOver) this.physics.world.timeScale = 1;
+    });
+  }
+
+  triggerLevelUpFx() {
+    const cam = this.cameras.main;
+    this.showQuickFlash(0.22, 120);
+    this.tweens.add({
+      targets: cam,
+      zoom: 1.01,
+      duration: 100,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  spawnBullet(x, y, vx = 0, kind = 'core') {
     const b = this.bullets.get(x, y, 'bullet');
     if (!b) return;
 
@@ -1490,11 +1723,19 @@ export default class PlayScene extends Phaser.Scene {
     b.body.setAllowGravity(false);
     b.body.checkCollision.none = false;
     b.setDepth(8);
-    b.setVelocity(vx, -470);
-    b.setTint(0x88ffff);
-    const buffPierce = this.powerupSystem?.hasPierceBuff?.() ? 99 : 0;
+    const speedY = this.frostLevel > 0 ? -500 : -470;
+    b.setVelocity(vx, speedY);
+    const hasPierce = this.pierceLevel > 0 || this.feverActive || this.powerupSystem?.hasPierceBuff?.();
+    const kindTint = kind === 'arc' ? 0xff9eff : kind === 'side' ? 0x9db8ff : 0x88ffff;
+    const tint = this.frostLevel > 0 ? 0x9feaff : hasPierce ? 0xffd289 : kindTint;
+    b.setTint(tint);
+    const scaleY = Phaser.Math.Clamp(1 + this.damageLevel * 0.08 + (hasPierce ? 0.08 : 0), 1, 1.45);
+    b.setScale(1, scaleY);
+    const buffPierce = this.powerupSystem?.hasPierceBuff?.() || this.feverActive ? 99 : 0;
     b.setData('pierceLeft', this.pierceLevel + buffPierce);
+    b.setData('bulletKind', kind);
     b.setData('trailAt', 0);
+    b.setData('hitLockUntil', 0);
   }
 
   spawnEnemyBulletAtPlayer(x, y) {
@@ -1509,24 +1750,86 @@ export default class PlayScene extends Phaser.Scene {
     b.setActive(true).setVisible(true);
     b.body.reset(x, y);
     b.body.setAllowGravity(false);
+    b.body.checkCollision.none = false;
+    b.body.setSize(6, 20);
+    b.body.setOffset(0, 0);
     b.setDepth(7);
     b.setTint(0xff5566);
+    b.setAlpha(1);
     b.setScale(0.85, 0.95);
+    b.setData('isDeathOrb', false);
+    b.setData('deathOrbUntil', 0);
     b.setVelocity((dx / len) * speed, (dy / len) * speed);
   }
 
   spawnEnemyShrapnel(x, y, vx, vy) {
-    const b = this.enemyBullets.get(x, y, 'particle_square');
+    const b = this.enemyBullets.get(x, y, 'particle_dot');
+    if (!b) return;
+    const len = Math.max(1, Math.hypot(vx, vy));
+    const speed = DEATH_ORB_BASE_SPEED + Phaser.Math.Between(-30, 30);
+    const orbUntil = this.time.now + DEATH_ORB_LIFETIME_MS;
+    b.setActive(true).setVisible(true);
+    b.body.reset(x, y);
+    b.body.setAllowGravity(false);
+    b.body.checkCollision.none = true;
+    b.setDepth(7);
+    b.setTint(0xff445a);
+    b.setAlpha(0.42);
+    b.setScale(1.9);
+    b.setCircle(3, 0, 0);
+    b.setData('isDeathOrb', true);
+    b.setData('deathOrbUntil', orbUntil);
+    b.setVelocity((vx / len) * speed, (vy / len) * speed);
+    this.time.delayedCall(DEATH_ORB_ARM_DELAY_MS, () => {
+      if (b.active && b.getData('isDeathOrb') && b.getData('deathOrbUntil') === orbUntil) {
+        b.body.checkCollision.none = false;
+        b.setAlpha(0.9);
+      }
+    });
+  }
+
+  spawnEnemyBulletDirectional(x, y, vx, vy, tint = 0xff5b6b, scale = 0.9) {
+    const b = this.enemyBullets.get(x, y, 'bullet');
     if (!b) return;
     b.setActive(true).setVisible(true);
     b.body.reset(x, y);
     b.body.setAllowGravity(false);
+    b.body.checkCollision.none = false;
+    b.body.setSize(6, 20);
+    b.body.setOffset(0, 0);
     b.setDepth(7);
-    b.setTint(0xffcc66);
-    b.setScale(0.8);
+    b.setTint(tint);
+    b.setAlpha(1);
+    b.setScale(scale, scale);
+    b.setData('isDeathOrb', false);
+    b.setData('deathOrbUntil', 0);
     b.setVelocity(vx, vy);
-    this.time.delayedCall(900, () => {
-      if (b.active) this.recycleEnemyBullet(b);
+  }
+
+  fireBossAttackPattern(enemy) {
+    if (!enemy?.active) return;
+    const pattern = enemy.getData('pattern') || 0;
+    const x = enemy.x;
+    const y = enemy.y + 26;
+    if (pattern === 0) {
+      const count = 8;
+      const speed = 165 + Math.min(120, this.currentLevel * 7);
+      for (let i = 0; i < count; i++) {
+        const angle = -Math.PI / 2 + (i / count) * Math.PI * 2;
+        this.spawnEnemyBulletDirectional(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 0xff4f8a, 0.92);
+      }
+      return;
+    }
+    const player = this.players.getChildren().find((p) => p.active);
+    if (!player) return;
+    const dx = player.x - x;
+    const dy = player.y - y;
+    const baseAngle = Math.atan2(dy, dx);
+    const spread = 0.22;
+    const speed = 245 + Math.min(140, this.currentLevel * 8);
+    [-spread, 0, spread].forEach((offset) => {
+      const a = baseAngle + offset;
+      this.spawnEnemyBulletDirectional(x, y, Math.cos(a) * speed, Math.sin(a) * speed, 0xff5566, 0.95);
     });
   }
 
@@ -1548,16 +1851,16 @@ export default class PlayScene extends Phaser.Scene {
     this.players.children.iterate((p) => {
       if (!p || !p.active) return true;
 
-      this.spawnBullet(p.x, p.y - 28, 0);
+      this.spawnBullet(p.x, p.y - 28, 0, 'core');
 
       if (this.multishotLevel >= 1) {
-        this.spawnBullet(p.x - 8, p.y - 26, -90);
-        this.spawnBullet(p.x + 8, p.y - 26, 90);
+        this.spawnBullet(p.x - 10, p.y - 26, -120, 'side');
+        this.spawnBullet(p.x + 10, p.y - 26, 120, 'side');
       }
 
       if (this.multishotLevel >= 2) {
-        this.spawnBullet(p.x - 14, p.y - 24, -150);
-        this.spawnBullet(p.x + 14, p.y - 24, 150);
+        this.spawnBullet(p.x - 16, p.y - 24, -220, 'arc');
+        this.spawnBullet(p.x + 16, p.y - 24, 220, 'arc');
       }
 
       this.emitMuzzleFlash(p.x, p.y - 30);
@@ -1577,29 +1880,31 @@ export default class PlayScene extends Phaser.Scene {
 
   onBulletHitEnemy(bullet, enemy) {
     if (!bullet.active || !enemy.active || this.gameOver) return;
+    const now = this.time.now;
+    const hitLockUntil = bullet.getData('hitLockUntil') || 0;
+    if (hitLockUntil > now) return;
+    bullet.setData('hitLockUntil', now + BULLET_HIT_LOCK_MS);
+    const pierceLeft = bullet.getData('pierceLeft') || 0;
+    const hasPierceThrough = pierceLeft > 0 || this.powerupSystem?.hasPierceBuff?.() || this.feverActive;
+    const kind = bullet.getData('bulletKind') || 'core';
 
     const crit = Math.random() < this.getCritChance();
-    const damage = this.getBulletDamage() * (crit ? 2 : 1);
+    const kindMult = kind === 'arc' ? 0.72 : kind === 'side' ? 0.86 : 1;
+    const damage = Math.max(1, Math.round(this.getBulletDamage() * kindMult * (crit ? 2 : 1)));
     this.audio?.playHit();
-    if (crit) this.audio?.playCrit();
-
-    const pierceLeft = bullet.getData('pierceLeft') || 0;
-    if (pierceLeft <= 0) {
-      this.recycleBullet(bullet);
-    } else {
-      bullet.setData('pierceLeft', pierceLeft - 1);
-      bullet.y -= 12;
-      bullet.body.reset(bullet.x, bullet.y);
+    if (crit) {
+      this.audio?.playCrit();
+      this.showQuickFlash(0.18, 50);
     }
 
     const shieldHp = enemy.getData('shieldHp') || 0;
     if (shieldHp > 0) {
       const sideHit = Math.abs(bullet.x - enemy.x) > 10;
-      const piercing = this.powerupSystem?.hasPierceBuff?.();
-      if (!sideHit && !piercing) {
+      if (!sideHit && !hasPierceThrough) {
         enemy.setData('shieldHp', Math.max(0, shieldHp - damage));
         this.showFloatingText('BLOCK', enemy.x, enemy.y - 10, { color: '#9feaff', size: 13, duration: 380 });
         this.emitImpactBurst(enemy.x, enemy.y, false);
+        this.recycleBullet(bullet);
         return;
       }
     }
@@ -1625,11 +1930,63 @@ export default class PlayScene extends Phaser.Scene {
     });
 
     if (hp <= 0) this.killEnemy(enemy);
+    if (kind === 'arc' && hp > 0) {
+      const splash = Math.max(1, Math.floor(damage * 0.45));
+      this.applySplashDamage(enemy, splash);
+    }
+    if (pierceLeft > 0) {
+      bullet.setData('pierceLeft', Math.max(0, pierceLeft - 1));
+      bullet.y -= 14;
+      bullet.body.reset(bullet.x, bullet.y);
+      bullet.body.checkCollision.none = true;
+      this.time.delayedCall(BULLET_PIERCE_IFRAME_MS, () => {
+        if (bullet.active) bullet.body.checkCollision.none = false;
+      });
+      if (pierceLeft >= 2) {
+        this.showFloatingText(`PIERCE x${pierceLeft}`, bullet.x, bullet.y - 10, {
+          color: '#ffd58a',
+          size: 10,
+          duration: 160,
+        });
+      }
+      bullet.setAlpha(0.9);
+      this.time.delayedCall(60, () => {
+        if (bullet.active) bullet.setAlpha(1);
+      });
+      return;
+    }
+    this.recycleBullet(bullet);
+  }
+
+  applySplashDamage(sourceEnemy, splashDamage) {
+    const radiusSq = 54 * 54;
+    this.enemies.children.iterate((candidate) => {
+      if (!candidate || !candidate.active || candidate === sourceEnemy || candidate.getData('isBoss')) return true;
+      const dx = candidate.x - sourceEnemy.x;
+      const dy = candidate.y - sourceEnemy.y;
+      if (dx * dx + dy * dy > radiusSq) return true;
+      const hp = (candidate.getData('health') || 1) - splashDamage;
+      candidate.setData('health', hp);
+      const txt = candidate.getData('healthText');
+      if (txt) txt.setText(String(Math.max(0, hp)));
+      this.showFloatingText(`-${splashDamage}`, candidate.x, candidate.y - 8, { color: '#ffb2ff', size: 10, duration: 180 });
+      if (hp <= 0) this.killEnemy(candidate);
+      return true;
+    });
   }
 
   onBulletHitEnemyBullet(playerBullet, enemyBullet) {
     if (!playerBullet.active || !enemyBullet.active) return;
-    this.recycleBullet(playerBullet);
+    const pierceLeft = playerBullet.getData('pierceLeft') || 0;
+    if (pierceLeft > 0) {
+      playerBullet.setData('pierceLeft', Math.max(0, pierceLeft - 1));
+      playerBullet.body.checkCollision.none = true;
+      this.time.delayedCall(BULLET_PIERCE_IFRAME_MS, () => {
+        if (playerBullet.active) playerBullet.body.checkCollision.none = false;
+      });
+    } else {
+      this.recycleBullet(playerBullet);
+    }
     this.recycleEnemyBullet(enemyBullet);
     this.emitImpactBurst(enemyBullet.x, enemyBullet.y, false);
   }
@@ -1640,8 +1997,10 @@ export default class PlayScene extends Phaser.Scene {
     const isBoss = enemy.getData('isBoss');
     const type = enemy.getData('enemyType') || 'circle';
     this.updateKillStreakOnKill();
-    if (isBoss) this.audio?.playBossDeath();
-    else this.audio?.playEnemyDeath();
+    if (isBoss) {
+      this.audio?.playBossDeath();
+      this.triggerBossDeathFx();
+    } else this.audio?.playEnemyDeath();
 
     this.sparkle.explode(isBoss ? 28 : 14, x, y);
     this.deathBurst.explode(isBoss ? 36 : 18, x, y);
@@ -1654,19 +2013,26 @@ export default class PlayScene extends Phaser.Scene {
     }
     if (enemy.getData('shrapnelOnDeath') && !isBoss) {
       [
-        [0, 200],
-        [0, -200],
-        [200, 0],
-        [-200, 0],
+        [0, 1],
+        [0.62, 0.78],
+        [-0.62, 0.78],
+        [0.92, 0.38],
+        [-0.92, 0.38],
       ].forEach(([vx, vy]) => this.spawnEnemyShrapnel(x, y, vx, vy));
     }
 
     this.recycleEnemy(enemy);
 
-    this.score += isBoss ? 250 : 10;
+    const gained = this.addScaledScore(isBoss ? 250 : 10);
     this.runKills += 1;
     if (!isBoss && type !== 'splitterMini') this.powerupSystem?.maybeDropAt(x, y);
-    this.syncAudioSceneState();
+    if (this.getScoreMultiplier() > 1) {
+      this.showFloatingText(`+${gained}`, x, y - 10, {
+        color: '#ffe082',
+        size: isBoss ? 24 : 14,
+        duration: 540,
+      });
+    }
     this.updateHud();
   }
 
@@ -1677,10 +2043,22 @@ export default class PlayScene extends Phaser.Scene {
     this.draftRerollsLeft = DRAFT_REROLLS;
     this.draftChoices = this.pickUpgradeChoices(3, this.draftBanishedKeys, new Set());
     this.fillDraftSlotsToThree();
-    if (this.draftChoices.length === 0) return;
+    if (this.draftChoices.length === 0) {
+      // Never allow progression to stall after level clear.
+      if (this.levelClearPending) {
+        this.showFloatingText('MAX BUILD - NEXT LEVEL', this.scale.width * 0.5, this.scale.height * 0.38, {
+          color: '#9fffd3',
+          size: 20,
+          duration: 900,
+        });
+        this.time.delayedCall(240, () => {
+          if (this.levelClearPending && !this.gameOver) this.startNextLevel();
+        });
+      }
+      return;
+    }
 
     this.isChoosingUpgrade = true;
-    this.syncAudioSceneState();
     if (this.pauseButton) this.pauseButton.setVisible(false);
     if (this.shieldRingG) this.shieldRingG.clear();
     this.clearTransientCombatVisuals();
@@ -1930,8 +2308,18 @@ export default class PlayScene extends Phaser.Scene {
       this.critLevel += 1;
     } else if (key === 'frost') {
       this.frostLevel += 1;
+    } else if (key === 'endlessOverclock') {
+      this.endlessPicks += 1;
+      this.endlessFireFactor = Math.max(0.86, this.endlessFireFactor * 0.99);
+      this.resetFireTimer();
+    } else if (key === 'endlessBounty') {
+      this.endlessPicks += 1;
+      this.endlessScoreBonus = Math.min(0.28, this.endlessScoreBonus + 0.012);
+    } else if (key === 'endlessCloseCall') {
+      this.endlessPicks += 1;
+      this.endlessNearMissBonus = Math.min(30, this.endlessNearMissBonus + 3);
     }
-    const picked = UPGRADE_DEFS.find((u) => u.key === key);
+    const picked = [...UPGRADE_DEFS, ...ENDLESS_UPGRADE_DEFS].find((u) => u.key === key);
     this.selectedUpgrades.push(picked ? picked.label : key);
     if (picked) this.showFloatingText(`Upgrade Acquired: ${picked.label}`, this.scale.width * 0.5, 120, {
       color: '#88ffd5',
@@ -1956,7 +2344,6 @@ export default class PlayScene extends Phaser.Scene {
     this.setPlayflowPaused(false);
     if (this.pauseButton) this.pauseButton.setVisible(true);
     this.updateHud();
-    this.syncAudioSceneState();
     if (this.levelClearPending) this.startNextLevel();
   }
 
@@ -1978,15 +2365,20 @@ export default class PlayScene extends Phaser.Scene {
 
   onPlayerHitEnemyBullet(player, bullet) {
     if (this.gameOver || !bullet.active || this.isChoosingUpgrade) return;
+    const isDeathOrb = Boolean(bullet.getData('isDeathOrb'));
     this.recycleEnemyBullet(bullet);
     if (this.shieldCharges > 0) {
       this.shieldFlashIndex = this.shieldCharges - 1;
       this.shieldFlashUntil = this.time.now + 220;
       this.shieldCharges -= 1;
       this.audio?.playShieldAbsorb();
+      if (isDeathOrb) {
+        this.showFloatingText('ORB BLOCK', player.x, player.y - 22, { color: '#ff9aa8', size: 12, duration: 340 });
+      }
       this.updateHud();
       return;
     }
+    if (isDeathOrb) this.showQuickFlash(0.2, 80);
     this.triggerGameOver(player);
   }
 
@@ -1994,12 +2386,22 @@ export default class PlayScene extends Phaser.Scene {
     this.bullets.killAndHide(bullet);
     bullet.body.stop();
     bullet.body.checkCollision.none = true;
+    bullet.clearTint();
+    bullet.setScale(1);
+    bullet.setAlpha(1);
   }
 
   recycleEnemyBullet(bullet) {
     this.enemyBullets.killAndHide(bullet);
     bullet.body.stop();
     bullet.body.checkCollision.none = true;
+    bullet.body.setSize(6, 20);
+    bullet.body.setOffset(0, 0);
+    bullet.clearTint();
+    bullet.setScale(1);
+    bullet.setAlpha(1);
+    bullet.setData('isDeathOrb', false);
+    bullet.setData('deathOrbUntil', 0);
   }
 
   recycleEnemy(enemy) {
@@ -2011,14 +2413,16 @@ export default class PlayScene extends Phaser.Scene {
 
   triggerGameOver(playerSprite) {
     this.gameOver = true;
+    this.endFeverMode();
     this.killStreak = 0;
+    this.comboTier = 0;
+    this.comboScoreMultiplier = 1;
     this.audio?.stopAllSfx?.();
     this.audio?.playGameOver();
-    this.audio?.stopMusic();
     if (this.shieldRingG) this.shieldRingG.clear();
 
     if (this.fireTimer) this.fireTimer.remove(false);
-    this.waveManager?.setPaused(true);
+    applyGameOverCombatCleanup(this);
 
     if (this.upgradeModal) {
       this.upgradeModal.destroy(true);
@@ -2052,7 +2456,7 @@ export default class PlayScene extends Phaser.Scene {
       this.gameOverResult = this.persistRunStats();
       this.isGameOverScreenVisible = true;
       if (this.pauseButton) this.pauseButton.setVisible(false);
-      this.overlayBg.setVisible(true).setAlpha(0.68);
+      this.overlayBg.setVisible(true).setAlpha(0.56);
       this.renderGameOverOverlay();
     });
   }

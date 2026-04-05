@@ -8,6 +8,7 @@
     "dev:host": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
+    "preview:host": "vite preview --host",
     "cap:sync": "npm run build && npx cap sync",
     "cap:add:android": "npx cap add android",
     "cap:add:ios": "npx cap add ios",

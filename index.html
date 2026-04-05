@@ -4,14 +4,19 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no"
     />
+    <meta name="theme-color" content="#0a0a12" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Trigon</title>
     <style>
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
       }
       html,
       body {
@@ -24,10 +29,12 @@
         height: -webkit-fill-available;
         height: var(--app-height, 100dvh);
         overflow: hidden;
+        overscroll-behavior: none;
         background: #0a0a12;
         touch-action: none;
+        -webkit-tap-highlight-color: transparent;
       }
-      /* Phaser FIT reads parent offsetWidth/offsetHeight — % height can be 0 before layout; fixed inset fixes blank canvas */
+      /* Phaser reads parent size; safe-area keeps controls away from notches / home bar */
       #game-container {
         position: fixed;
         inset: 0;
@@ -37,9 +44,16 @@
         min-height: -webkit-fill-available;
         height: var(--app-height, 100dvh);
         overflow: hidden;
+        touch-action: none;
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+          env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+        user-select: none;
+        -webkit-user-select: none;
       }
       #game-container canvas {
         display: block;
+        touch-action: none;
+        pointer-events: auto;
       }
     </style>
   </head>

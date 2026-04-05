@@ -9,14 +9,11 @@ export default class SoundEngine {
     this.settings = {
       masterVolume: clamp01(settings.masterVolume ?? 0.9),
       sfxVolume: clamp01(settings.sfxVolume ?? 0.85),
-      musicVolume: clamp01(settings.musicVolume ?? 0.65),
       muted: Boolean(settings.muted),
     };
     this.context = null;
     this.masterGain = null;
     this.sfxGain = null;
-    this.musicGain = null;
-    this.musicDuckGain = null;
     this.noiseBuffer = null;
     this.activeSfxSources = new Set();
   }
@@ -29,12 +26,8 @@ export default class SoundEngine {
 
     this.masterGain = this.context.createGain();
     this.sfxGain = this.context.createGain();
-    this.musicGain = this.context.createGain();
-    this.musicDuckGain = this.context.createGain();
 
     this.sfxGain.connect(this.masterGain);
-    this.musicGain.connect(this.musicDuckGain);
-    this.musicDuckGain.connect(this.masterGain);
     this.masterGain.connect(this.context.destination);
 
     this.noiseBuffer = this.createNoiseBuffer();
@@ -64,22 +57,28 @@ export default class SoundEngine {
     }
   }
 
+  /** DOM tap handler: call synchronously inside pointer/touch (no await before this). */
+  unlockSyncFromUserGesture() {
+    const ctx = this.ensureContext();
+    if (!ctx) return false;
+    if (ctx.state === 'running') return true;
+    try {
+      void ctx.resume();
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
   getContext() {
     return this.ensureContext();
   }
 
-  getMusicDestination() {
-    this.ensureContext();
-    return this.musicGain;
-  }
-
   applySettingsToGraph() {
-    if (!this.masterGain || !this.sfxGain || !this.musicGain || !this.musicDuckGain) return;
+    if (!this.masterGain || !this.sfxGain) return;
     const master = this.settings.muted ? 0 : this.settings.masterVolume;
     this.masterGain.gain.value = master;
     this.sfxGain.gain.value = this.settings.sfxVolume;
-    this.musicGain.gain.value = this.settings.musicVolume;
-    this.musicDuckGain.gain.value = 1;
   }
 
   getSettings() {
@@ -96,24 +95,9 @@ export default class SoundEngine {
     this.applySettingsToGraph();
   }
 
-  setMusicVolume(volume) {
-    this.settings.musicVolume = clamp01(volume);
-    this.applySettingsToGraph();
-  }
-
   setMuted(muted) {
     this.settings.muted = Boolean(muted);
     this.applySettingsToGraph();
-  }
-
-  setMusicDuck(value, rampMs = 120) {
-    this.ensureContext();
-    if (!this.musicDuckGain || !this.context) return;
-    const now = this.context.currentTime;
-    const target = clamp01(value);
-    const t = now + Math.max(0, rampMs) / 1000;
-    this.musicDuckGain.gain.cancelScheduledValues(now);
-    this.musicDuckGain.gain.linearRampToValueAtTime(target, t);
   }
 
   playOsc({
@@ -124,13 +108,10 @@ export default class SoundEngine {
     attackMs = 2,
     releaseMs = 80,
     detune = 0,
-    destination = 'sfx',
     filter = null,
   }) {
     const ctx = this.ensureContext();
-    if (!ctx || ctx.state !== 'running') return;
-    const out = destination === 'music' ? this.musicGain : this.sfxGain;
-    if (!out) return;
+    if (!ctx || ctx.state !== 'running' || !this.sfxGain) return;
 
     const osc = ctx.createOscillator();
     osc.type = type;
@@ -158,23 +139,20 @@ export default class SoundEngine {
     } else {
       osc.connect(amp);
     }
-    amp.connect(out);
+    amp.connect(this.sfxGain);
 
+    this.trackSfxSource(osc);
     osc.start(now);
-    if (destination === 'sfx') this.trackSfxSource(osc);
     osc.stop(stopAt);
   }
 
   playNoise({
     durationMs = 80,
     gain = 0.12,
-    destination = 'sfx',
     filter = { type: 'highpass', frequency: 1200, q: 0.7 },
   }) {
     const ctx = this.ensureContext();
-    if (!ctx || ctx.state !== 'running' || !this.noiseBuffer) return;
-    const out = destination === 'music' ? this.musicGain : this.sfxGain;
-    if (!out) return;
+    if (!ctx || ctx.state !== 'running' || !this.noiseBuffer || !this.sfxGain) return;
 
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
@@ -192,10 +170,10 @@ export default class SoundEngine {
 
     src.connect(biq);
     biq.connect(amp);
-    amp.connect(out);
+    amp.connect(this.sfxGain);
 
+    this.trackSfxSource(src);
     src.start(now);
-    if (destination === 'sfx') this.trackSfxSource(src);
     src.stop(now + total + 0.01);
   }
 
@@ -236,13 +214,15 @@ export default class SoundEngine {
   }
 
   playEnemyDeath() {
-    this.playNoise({ durationMs: 120, gain: 0.07, filter: { type: 'lowpass', frequency: 1500, q: 0.8 } });
-    this.playOsc({ type: 'sawtooth', frequency: 240, durationMs: 120, gain: 0.05, releaseMs: 110 });
+    this.playNoise({ durationMs: 150, gain: 0.11, filter: { type: 'bandpass', frequency: 980, q: 1.2 } });
+    this.playOsc({ type: 'square', frequency: 210, durationMs: 110, gain: 0.085, releaseMs: 96 });
+    this.playOsc({ type: 'triangle', frequency: 132, durationMs: 135, gain: 0.07, releaseMs: 120 });
   }
 
   playBossDeath() {
-    this.playNoise({ durationMs: 400, gain: 0.12, filter: { type: 'lowpass', frequency: 900, q: 0.6 } });
-    this.playOsc({ type: 'triangle', frequency: 96, durationMs: 480, gain: 0.16, releaseMs: 420 });
+    this.playNoise({ durationMs: 420, gain: 0.16, filter: { type: 'lowpass', frequency: 760, q: 0.7 } });
+    this.playOsc({ type: 'sawtooth', frequency: 90, durationMs: 520, gain: 0.16, releaseMs: 450 });
+    this.playOsc({ type: 'square', frequency: 124, durationMs: 280, gain: 0.09, releaseMs: 240 });
   }
 
   playShieldAbsorb() {
@@ -281,8 +261,19 @@ export default class SoundEngine {
     this.playOsc({ type: 'triangle', frequency: tones[idx], durationMs: 95, gain: 0.05, releaseMs: 80 });
   }
 
-  // Used by MusicEngine.
-  playMusicNote(frequency, durationMs = 220, gain = 0.08, type = 'sine') {
-    this.playOsc({ type, frequency, durationMs, gain, releaseMs: durationMs * 0.85, destination: 'music' });
+  playComboBreak() {
+    this.playNoise({ durationMs: 180, gain: 0.09, filter: { type: 'lowpass', frequency: 760, q: 0.7 } });
+    this.playOsc({ type: 'sawtooth', frequency: 210, durationMs: 180, gain: 0.06, releaseMs: 165 });
+  }
+
+  playNearMissWhoosh() {
+    this.playNoise({ durationMs: 90, gain: 0.06, filter: { type: 'bandpass', frequency: 1900, q: 1.1 } });
+    this.playOsc({ type: 'triangle', frequency: 970, durationMs: 80, gain: 0.035, releaseMs: 70 });
+  }
+
+  playFeverStart() {
+    this.playOsc({ type: 'square', frequency: 523.25, durationMs: 120, gain: 0.08, releaseMs: 100 });
+    this.playOsc({ type: 'square', frequency: 659.25, durationMs: 150, gain: 0.08, releaseMs: 130 });
+    this.playOsc({ type: 'triangle', frequency: 880, durationMs: 210, gain: 0.07, releaseMs: 190 });
   }
 }

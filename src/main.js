@@ -1,4 +1,5 @@
 import { createAudioFacade } from './audio/index.js';
+import { applyAppHeightCss, getViewportGameSize } from './platform/viewport.js';
 
 function showBootError(error) {
   const root = document.getElementById('game-container') || document.body;
@@ -27,26 +28,22 @@ async function startGame() {
       import('./scenes/PlayScene.js'),
     ]);
 
-    const syncViewportHeight = () => {
-      const vv = window.visualViewport;
-      const h = Math.round(vv ? vv.height : window.innerHeight);
-      document.documentElement.style.setProperty('--app-height', `${h}px`);
-      return h;
-    };
-
-    syncViewportHeight();
+    applyAppHeightCss();
+    const initialSize = getViewportGameSize();
 
     const config = {
       type: Phaser.AUTO,
       parent: 'game-container',
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: initialSize.width,
+      height: initialSize.height,
       backgroundColor: '#0a0a12',
+      disableContextMenu: true,
       scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         parent: 'game-container',
         expandParent: true,
+        autoRound: true,
       },
       physics: {
         default: 'arcade',
@@ -55,17 +52,27 @@ async function startGame() {
           debug: false,
         },
       },
+      input: {
+        activePointers: 4,
+      },
       scene: [Boot, Menu, PlayScene],
     };
 
     const game = new Phaser.Game(config);
     const audio = createAudioFacade();
     game.registry.set('audio', audio);
+
+    // Keep nudging AudioContext awake on every gesture until running (covers tab focus / odd mobile states).
+    const domUnlockOpts = { capture: true, passive: true };
+    const domAudioNudge = () => {
+      void audio.resume();
+    };
+    document.addEventListener('touchstart', domAudioNudge, domUnlockOpts);
+    document.addEventListener('pointerdown', domAudioNudge, domUnlockOpts);
     const syncGameViewport = () => {
-      const vv = window.visualViewport;
-      const w = Math.round(vv ? vv.width : window.innerWidth);
-      const h = syncViewportHeight();
-      game.scale.resize(w, h);
+      applyAppHeightCss();
+      const { width, height } = getViewportGameSize();
+      game.scale.resize(width, height);
       game.scale.refresh();
     };
     let viewportSyncId = 0;
@@ -81,16 +88,31 @@ async function startGame() {
       window.visualViewport.addEventListener('scroll', queueViewportSync);
     }
     window.addEventListener('resize', queueViewportSync);
-    window.addEventListener('orientationchange', queueViewportSync);
+    const onOrientationChange = () => {
+      queueViewportSync();
+      globalThis.setTimeout(queueViewportSync, 120);
+      globalThis.setTimeout(queueViewportSync, 400);
+    };
+    window.addEventListener('orientationchange', onOrientationChange);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        game.loop.sleep();
+      } else {
+        game.loop.wake(true);
+        queueViewportSync();
+      }
+    });
     window.addEventListener(
       'beforeunload',
       () => {
+        document.removeEventListener('touchstart', domAudioNudge, domUnlockOpts);
+        document.removeEventListener('pointerdown', domAudioNudge, domUnlockOpts);
         if (window.visualViewport) {
           window.visualViewport.removeEventListener('resize', queueViewportSync);
           window.visualViewport.removeEventListener('scroll', queueViewportSync);
         }
         window.removeEventListener('resize', queueViewportSync);
-        window.removeEventListener('orientationchange', queueViewportSync);
+        window.removeEventListener('orientationchange', onOrientationChange);
         audio.destroy();
       },
       { once: true },

@@ -1,6 +1,8 @@
 import { buildLevelWaveSet } from './WaveDefinitions.js';
 
 const BREAK_MS = 2500;
+const VISIBLE_SPAWN_TOP = 116;
+const VISIBLE_SPAWN_SPREAD = 64;
 
 export default class WaveManager {
   constructor(scene, handlers = {}) {
@@ -103,6 +105,7 @@ export default class WaveManager {
     const widthLeft = this.scene.playLeft + 24;
     const widthRight = this.scene.playRight - 24;
     const centerX = (widthLeft + widthRight) * 0.5;
+    const spawnTop = Math.min(this.scene.scale.height * 0.36, VISIBLE_SPAWN_TOP);
     let seq = 0;
     wave.enemies.forEach((entry) => {
       for (let i = 0; i < entry.count; i += 1) {
@@ -110,23 +113,25 @@ export default class WaveManager {
           type: entry.type,
           spawnDelay: entry.spawnDelay,
           x: centerX,
-          y: -38 - i * 22,
+          y: spawnTop + ((i + seq) % 3) * (VISIBLE_SPAWN_SPREAD / 2),
         };
 
         if (wave.spawnPattern === 'burst') {
           base.x = widthLeft + ((i + seq) % 9) * ((widthRight - widthLeft) / 8);
-          base.spawnDelay = i === 0 ? 140 : 22;
+          base.spawnDelay = i === 0 ? 150 : 19;
         } else if (wave.spawnPattern === 'sides') {
           const isLeft = (i + seq) % 2 === 0;
           base.x = isLeft ? widthLeft : widthRight;
-          base.vx = isLeft ? 45 : -45;
+          base.y = spawnTop + ((i + seq) % 3) * 16;
+          base.vx = isLeft ? 58 : -58;
         } else if (wave.spawnPattern === 'v_formation') {
           const side = i % 2 === 0 ? -1 : 1;
           const rank = Math.floor(i / 2);
           base.x = centerX + side * rank * 34;
-          base.y = -45 - rank * 16;
+          base.y = spawnTop + rank * 12;
         } else {
           base.x = widthLeft + Math.random() * (widthRight - widthLeft);
+          base.y = spawnTop + Math.random() * VISIBLE_SPAWN_SPREAD;
         }
 
         queue.push(base);

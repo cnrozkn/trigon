@@ -99,9 +99,9 @@ Boot sahnesi Phaser Graphics API kullanarak tüm oyun texture'larını runtime'd
 | `enemy` | 40×40 | Pembe neon halka daire (çift ring) | ✅ Evet |
 | `particle_square` | 8×8 | Pembe kare parçacık | ✅ Evet |
 | `particle_dot` | 6×6 | Beyaz nokta parçacık | ✅ Evet |
-| `powerup_shield` | 36×36 | Mavi çift halka + merkez nokta | ❌ Hayır (Kullanılmıyor) |
-| `powerup_pierce` | 36×36 | Sarı ok ikonu | ❌ Hayır (Kullanılmıyor) |
-| `powerup_slow` | 36×36 | Yeşil kum saati ikonu | ❌ Hayır (Kullanılmıyor) |
+| `powerup_shield` | 36×36 | Mavi çift halka + merkez nokta | ✅ Evet |
+| `powerup_pierce` | 36×36 | Sarı ok ikonu | ✅ Evet |
+| `powerup_slow` | 36×36 | Yeşil kum saati ikonu | ✅ Evet |
 | `skill_sweep_line` | 400×18 | Yeşil neon süpürme çubuğu | ❌ Hayır (Kullanılmıyor) |
 | `boss_pentagon` | 120×120 | Mor-pembe pentagon (Boss Tip A) | ✅ Evet |
 | `boss_hexagon` | 120×120 | Mor hexagon (Boss Tip B) | ✅ Evet |
@@ -114,7 +114,7 @@ Boot sahnesi Phaser Graphics API kullanarak tüm oyun texture'larını runtime'd
 - Herhangi bir dokunuşta → PlayScene'e geçiş
 - Responsive: resize event'e bağlı layout
 
-### 4.3 PlayScene.js — Oynanış (Monolitik, 936 satır)
+### 4.3 PlayScene.js — Oynanış (Monolitik, >2K satır)
 
 Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
 
@@ -136,13 +136,13 @@ Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
 |-----------|-------|
 | Base ateş aralığı | 380ms |
 | Minimum ateş aralığı | 120ms |
-| Mermi hızı | -470 (yukarı) |
+| Mermi hızı | -470 (base), frost aktifken daha hızlı |
 | Base hasar | 1 + damageLevel |
 | Crit şansı | critLevel × %8 |
 | Crit çarpanı | 2× |
 
 - Her aktif üçgen bağımsız ateş eder
-- Multishot: level 1 = ±90 vx yan mermiler, level 2 = ±150 vx ekstra yan
+- Multishot: level 1 = side shot, level 2 = arc shot (ek splash etkisi)
 - Pierce: mermi düşmandan geçer (pierceLevel kadar)
 - Frost: frostLevel × %18 şans, 1.4s + frostLevel×350ms yavaşlatma
 - Ateş animasyonu: scale pulse 1.14× (70ms yoyo)
@@ -152,10 +152,10 @@ Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
 #### Normal Düşmanlar
 | Parametre | Değer |
 |-----------|-------|
-| Spawn aralığı | 900ms (base) → min 260ms |
-| Dalga boyutu | Level 1-4: 2, Level 5-9: 3, Level 10+: 4 |
-| HP | Level 1-4: 1, sonra: `rand(1 + floor(lv×0.45), 2 + floor(lv×0.95))` |
-| Hız çarpanı | Level'e göre sigmoid benzeri artış (0.95 → 1.97+) |
+| Spawn aralığı | Wave tanımları + level tabanlı delay çarpanı |
+| Dalga boyutu | Level'e göre dinamik (WaveDefinitions) |
+| HP | `enemyBaseHP(level)` + tür bazlı `scaleHealth`; level 15+ sonrası sert ramp |
+| Hız çarpanı | Level'e göre parça parça artış; 15+ sonrası daha agresif |
 | Hareket | Dikey düşüş + hafif yatay random + duvardan sekme |
 | Görünüm | Pembe neon halka, HP sayısı üzerinde |
 
@@ -163,8 +163,8 @@ Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
 | Parametre | Değer |
 |-----------|-------|
 | Spawn | Her 5 level'da bir (level 5, 10, 15...) |
-| HP | 35 + currentLevel × 6 |
-| Hareket | Sinüs/kosinüs dalga (pattern 0 = sin, pattern 1 = cos) |
+| HP | `38 + level*7` + level 15+ boss ramp |
+| Hareket | Sinüs/kosinüs dalga + pattern bazlı mermi atakları |
 | Skor ödülü | 250 puan |
 | Görünüm | Pentagon (tek levels/5) veya Hexagon (çift levels/5) |
 | Wall bounce | Playfield kenarlarından yansıma (BOSS_X_PAD = 56) |
@@ -180,13 +180,13 @@ Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
 
 ### 5.5 Roguelite Upgrade Draft Sistemi
 
-**Tetikleme:** Her 22 saniyede bir (`UPGRADE_INTERVAL_MS`) otomatik açılır.
+**Tetikleme:** Level clear sonrası otomatik açılır (`onLevelCleared -> openUpgradeSelection`).
 
 **Draft Akışı:**
 1. Oyun duraklatılır (physics pause, timer pause)
-2. Karanlık overlay gösterilir (alpha 0.52)
+2. Karanlık overlay gösterilir (duruma göre 0.52-0.68)
 3. 3 kart sunulur (ağırlıklı rastgele seçim)
-4. Oyuncu bir kart seçer → upgrade uygulanır → oyun devam eder
+4. Oyuncu bir kart seçer → upgrade uygulanır → bir sonraki level akışı devam eder
 
 **Kart Havuzu:**
 
@@ -219,8 +219,8 @@ Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
 2. Kamera sarsıntısı: 500ms, intensity 0.025
 3. Ölüm partikülleri: 48 kare + 32 nokta
 4. Oyuncu fade-out: alpha → 0, scale → 0.2 (400ms)
-5. 1600ms sonra → Menu sahnesine geçiş
-6. **Eksik:** Final skor gösterimi, retry butonu, high score karşılaştırması
+5. Gecikmeli olarak Game Over overlay açılır (score/level/kills/time/max combo/upgrades)
+6. Retry ve Menu butonları ile sahne geçişi yapılır
 
 ---
 
@@ -274,11 +274,8 @@ Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
 const START_PLAYER_COUNT = 1;      // Başlangıç üçgen sayısı
 const MAX_PLAYER_COUNT = 6;        // Max üçgen sayısı
 const KILLS_PER_LEVEL = 10;        // Seviye atlama kill sayısı
-const UPGRADE_INTERVAL_MS = 22000; // Upgrade draft aralığı (ms)
 const BASE_FIRE_MS = 380;          // Base ateş aralığı
 const MIN_FIRE_MS = 120;           // Min ateş aralığı
-const BASE_ENEMY_SPAWN_MS = 900;   // Base düşman spawn aralığı
-const MIN_ENEMY_SPAWN_MS = 260;    // Min düşman spawn aralığı
 const DRAFT_REROLLS = 2;           // Draft reroll hakkı
 const PLAYFIELD_MARGIN = 22;       // Playfield kenar boşluğu
 const BOSS_X_PAD = 56;             // Boss duvar mesafesi

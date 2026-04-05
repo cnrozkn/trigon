@@ -4,19 +4,35 @@ function randBetween(min, max) {
   return Phaser.Math.Between(min, max);
 }
 
+function enemyBaseHP(level) {
+  if (level <= 2) return 1;
+  if (level <= 4) return 2;
+  const base = Math.floor(2 + Math.log2(level - 1) * 1.35);
+  if (level <= 15) return base;
+  const over = level - 15;
+  const extra = Math.floor(over * 1.8 + over * over * 0.16);
+  return base + extra;
+}
+
 function scaleHealth(base, level, mult = 1) {
-  const bonus = Math.floor(level * 0.25);
-  return Math.max(1, Math.floor((base + bonus) * mult));
+  const baseLevelHp = enemyBaseHP(level);
+  return Math.max(1, Math.floor(baseLevelHp * base * mult));
 }
 
 export function buildEnemyConfig(type, level) {
   if (type === 'boss') {
     const usePentagon = Math.floor(level / 5) % 2 === 1;
+    const baseBossHp = 38 + level * 7;
+    let tunedBossHp = level === 5 ? baseBossHp - 4 : baseBossHp;
+    if (level > 15) {
+      const over = level - 15;
+      tunedBossHp += Math.floor(over * 18 + over * over * 1.6);
+    }
     return {
       type,
       texture: usePentagon ? 'boss_pentagon' : 'boss_hexagon',
       tint: null,
-      hp: 35 + level * 6,
+      hp: Math.max(1, tunedBossHp),
       body: 'boss',
       baseVy: 0,
       baseVx: 0,

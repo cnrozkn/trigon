@@ -584,12 +584,12 @@ Aşağıdaki tablo hangi level'da hangi düşman tipinin aktifleştiğini göste
 
 ### 5.1 Kill Streak / Combo Sistemi
 
-**Mevcut:** Yok. Ardışık kill'ler ödüllendirilmiyor.
+**Mevcut:** Tamamlandı. Ardışık kill'ler combo kademesi, skor çarpanı ve görsel/ses geri bildirimi ile ödüllendiriliyor.
 
 **Yapılacaklar:**
-- [ ] Combo sayacı: ardışık kill'ler sayılır
-- [ ] Combo timer: son kill'den 2.5 saniye içinde yeni kill olmazsa combo sıfırlanır
-- [ ] Combo kademeleri:
+- [x] Combo sayacı: ardışık kill'ler sayılır
+- [x] Combo timer: son kill'den 2.5 saniye içinde yeni kill olmazsa combo sıfırlanır
+- [x] Combo kademeleri:
 
   | Kill Streak | Combo | Skor Çarpanı | Görsel | Ses |
   |-------------|-------|-------------|--------|-----|
@@ -599,44 +599,44 @@ Aşağıdaki tablo hangi level'da hangi düşman tipinin aktifleştiğini göste
   | 30-59 | ×5 | 3× | Background color shift | bass drop |
   | 60+ | ×10 FEVER | 5× | ← Fever Mode aktif → | crescendo |
 
-- [ ] Combo sayısı ekranın üst-orta kısmında büyük font ile gösterilir
-- [ ] Her kademe atlamasında kısa "COMBO ×3!" text flash
-- [ ] Combo kırılınca: kırmızı patlama efekti + düşüş sesi
+- [x] Combo sayısı ekranın üst-orta kısmında büyük font ile gösterilir
+- [x] Her kademe atlamasında kısa "COMBO ×3!" text flash
+- [x] Combo kırılınca: kırmızı patlama efekti + düşüş sesi
 
 ### 5.2 Fever Mode
 
 **Tetikleme:** 60+ ardışık kill.
 
 **Yapılacaklar:**
-- [ ] Fever aktif olunca:
+- [x] Fever aktif olunca:
   - Arka plan rengi parlak neon tona geçer (breathing glow yoğunlaşır)
   - Tüm mermiler otomatik piercing olur
   - Ateş hızı 1.5× olur
   - Skor çarpanı 5×
   - Müzik intensify (tüm katmanlar aktif, tempo +%10)
   - Ekranın kenarlarında neon parlama efekti
-- [ ] Süre: 8 saniye (kill zinciri devam etse bile)
-- [ ] Ekranda büyük "🔥 FEVER!" yazısı (pulsing, neon)
-- [ ] Fever bitince: kısa "cool down" — normal moda dönüş, ateş hızı/pierce resetlenir
-- [ ] Bir run'da birden fazla fever tetiklenebilir
+- [x] Süre: 8 saniye (kill zinciri devam etse bile)
+- [x] Ekranda büyük "🔥 FEVER!" yazısı (pulsing, neon)
+- [x] Fever bitince: kısa "cool down" — normal moda dönüş, ateş hızı/pierce resetlenir
+- [x] Bir run'da birden fazla fever tetiklenebilir
 
 ### 5.3 Near-Miss Bonus
 
 **Yapılacaklar:**
-- [ ] Düşman, overlap olmadan oyuncuya 30px'den yakın geçerse:
+- [x] Düşman, overlap olmadan oyuncuya 30px'den yakın geçerse:
   - +50 bonus skor
   - "CLOSE!" floating text (turuncu, 400ms)
   - Kısa adrenalin SFX (kısa whoosh)
   - Hafif screen flash (beyaz, 30ms)
-- [ ] Near-miss combo ile stack olabilir (near-miss streak bonusu)
-- [ ] Risk-reward dengesi: yakın geçirmek skor kazandırır ama riskli
+- [x] Near-miss combo ile stack olabilir (near-miss streak bonusu)
+- [x] Risk-reward dengesi: yakın geçirmek skor kazandırır ama riskli
 
 ### 5.4 Zorluk Eğrisi Düzeltmesi
 
-**Mevcut:** Lineer ve keskin kırılma noktaları olan eğri.
+**Mevcut:** Smooth eğriye geçirildi; hız/HP/spawn yoğunluğu kademeli artıyor.
 
 **Yapılacaklar:**
-- [ ] Düşman hız çarpanını sigmoid fonksiyona çevir:
+- [x] Düşman hız çarpanını sigmoid fonksiyona çevir:
   ```javascript
   // YENİ: Smooth sigmoid eğri
   function enemySpeedMultiplier(level) {
@@ -645,7 +645,7 @@ Aşağıdaki tablo hangi level'da hangi düşman tipinin aktifleştiğini göste
   // Level 1: ~0.93   Level 5: ~1.30   Level 10: ~2.04
   // Level 15: ~2.64   Level 20: ~2.87  Level 30: ~2.99
   ```
-- [ ] Düşman HP artışını logaritmik yap:
+- [x] Düşman HP artışını logaritmik yap:
   ```javascript
   // YENİ: Logaritmik HP artışı
   function enemyBaseHP(level) {
@@ -654,17 +654,17 @@ Aşağıdaki tablo hangi level'da hangi düşman tipinin aktifleştiğini göste
   }
   // Level 3: 1, Level 5: 2, Level 10: 4, Level 15: 5, Level 20: 6
   ```
-- [ ] Spawn hızı da sigmoid ile smooth geçiş yapsın (mevcut kırılma noktaları yerine)
-- [ ] Playtest ile fine-tuning yapılmalı: İlk 3 level kolay ama sıkıcı olmamalı, level 10 civarı zorlayıcı ama adil olmalı
+- [x] Spawn hızı da sigmoid ile smooth geçiş yapsın (mevcut kırılma noktaları yerine)
+- [x] Playtest ile fine-tuning yapılmalı: İlk 3 level kolay ama sıkıcı olmamalı, level 10 civarı zorlayıcı ama adil olmalı
 
 ### 5.5 Kamera & Ekran Efektleri
 
 **Yapılacaklar:**
-- [ ] **Boss girişi:** Hafif zoom-in + zoom-out (1.0 → 1.02 → 1.0, 600ms)
-- [ ] **Crit hit:** Çok kısa chromatic aberration benzeri efekt (RGB offset, 50ms) — veya basit beyaz flash
-- [ ] **Düşük kalkan:** Ekran kenarlarında kırmızı vignette (shieldCharges === 1)
-- [ ] **Boss ölümü:** 200ms slow-motion (time.timeScale = 0.3) + beyaz flash + normal hıza dönüş
-- [ ] **Level up:** Kısa pulse zoom (1.0 → 1.01 → 1.0, 200ms) + ekran flash
+- [x] **Boss girişi:** Hafif zoom-in + zoom-out (1.0 → 1.02 → 1.0, 600ms)
+- [x] **Crit hit:** Çok kısa chromatic aberration benzeri efekt (RGB offset, 50ms) — veya basit beyaz flash
+- [x] **Düşük kalkan:** Ekran kenarlarında kırmızı vignette (shieldCharges === 1)
+- [x] **Boss ölümü:** 200ms slow-motion (time.timeScale = 0.3) + beyaz flash + normal hıza dönüş
+- [x] **Level up:** Kısa pulse zoom (1.0 → 1.01 → 1.0, 200ms) + ekran flash
 
 ---
 

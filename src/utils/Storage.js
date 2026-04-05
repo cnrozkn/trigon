@@ -4,7 +4,6 @@ const GAME_PROFILE_KEY = 'trigon.game.profile.v1';
 const DEFAULT_AUDIO_SETTINGS = {
   masterVolume: 0.9,
   sfxVolume: 0.85,
-  musicVolume: 0.65,
   muted: false,
   hapticEnabled: true,
 };
@@ -62,7 +61,6 @@ export function loadAudioSettings() {
   return {
     masterVolume: clamp01(parsed.masterVolume, DEFAULT_AUDIO_SETTINGS.masterVolume),
     sfxVolume: clamp01(parsed.sfxVolume, DEFAULT_AUDIO_SETTINGS.sfxVolume),
-    musicVolume: clamp01(parsed.musicVolume, DEFAULT_AUDIO_SETTINGS.musicVolume),
     muted: Boolean(parsed.muted),
     hapticEnabled: parsed.hapticEnabled !== false,
   };
@@ -72,7 +70,6 @@ export function saveAudioSettings(settings) {
   const safe = {
     masterVolume: clamp01(settings.masterVolume, DEFAULT_AUDIO_SETTINGS.masterVolume),
     sfxVolume: clamp01(settings.sfxVolume, DEFAULT_AUDIO_SETTINGS.sfxVolume),
-    musicVolume: clamp01(settings.musicVolume, DEFAULT_AUDIO_SETTINGS.musicVolume),
     muted: Boolean(settings.muted),
     hapticEnabled: settings.hapticEnabled !== false,
   };

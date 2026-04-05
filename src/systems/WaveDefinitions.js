@@ -17,6 +17,16 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function spawnDelayMultiplier(level) {
+  // Keep level 1-2 baseline stable, ramp pressure after level 3.
+  if (level <= 2) return 1.12;
+  const base = 1.18 - 0.65 / (1 + Math.exp(-0.26 * (level - 7)));
+  if (level === 5) return Math.max(0.56, base - 0.005);
+  if (level > 15) return Math.max(0.42, base - 0.12);
+  if (level >= 4 && level <= 8) return Math.max(0.56, base - 0.035);
+  return base;
+}
+
 export function getEnemyUnlockLevels() {
   return { ...ENEMY_UNLOCK_LEVELS };
 }
@@ -30,9 +40,10 @@ export function buildLevelWaveSet(level) {
   const waveCount = clamp(3 + Math.floor((level - 1) / 4), 3, 5);
   const patterns = ['sequential', 'burst', 'sides', 'v_formation'];
   const hasBossWave = level >= 5 && level % 5 === 0;
+  const delayFactor = spawnDelayMultiplier(level);
 
-  const minEnemies = level >= 10 ? 12 : level >= 5 ? 10 : 6;
-  const maxEnemies = level >= 10 ? 15 : level >= 5 ? 12 : 8;
+  const minEnemies = level >= 14 ? 15 : level >= 10 ? 13 : level >= 6 ? 12 : level >= 3 ? 9 : 6;
+  const maxEnemies = level >= 14 ? 19 : level >= 10 ? 17 : level >= 6 ? 15 : level >= 3 ? 11 : 8;
 
   const waves = [];
   for (let wave = 0; wave < waveCount; wave += 1) {
@@ -47,7 +58,7 @@ export function buildLevelWaveSet(level) {
     const entries = [...counts.entries()].map(([type, count]) => ({
       type,
       count,
-      spawnDelay: type === 'tank' ? 460 : type === 'zigzag' ? 300 : 360,
+      spawnDelay: Math.round((type === 'tank' ? 460 : type === 'zigzag' ? 300 : 360) * delayFactor),
     }));
 
     waves.push({

@@ -1,22 +1,19 @@
 import SoundEngine from './SoundEngine.js';
-import MusicEngine from './MusicEngine.js';
 import { loadAudioSettings, saveAudioSettings } from '../utils/Storage.js';
 
 export function createAudioFacade() {
   const sound = new SoundEngine(loadAudioSettings());
-  const music = new MusicEngine(sound);
 
   const persist = () => saveAudioSettings(sound.getSettings());
 
   return {
+    unlockSyncFromUserGesture() {
+      return sound.unlockSyncFromUserGesture();
+    },
     async resume() {
-      const ok = await sound.resumeIfNeeded();
-      if (ok) music.start();
-      return ok;
+      return sound.resumeIfNeeded();
     },
-    destroy() {
-      music.stop();
-    },
+    destroy() {},
     // settings
     getSettings() {
       return sound.getSettings();
@@ -29,26 +26,12 @@ export function createAudioFacade() {
       sound.setSfxVolume(v);
       persist();
     },
-    setMusicVolume(v) {
-      sound.setMusicVolume(v);
-      persist();
-    },
     setMuted(v) {
       sound.setMuted(v);
       persist();
     },
-    // scene state
-    setSceneState(state) {
-      music.setState(state);
-    },
-    stopMusic() {
-      music.stop();
-    },
     stopAllSfx() {
       sound.stopAllSfx();
-    },
-    startMusic() {
-      music.start();
     },
     // semantic SFX events
     playFire() { sound.playFire(); },
@@ -63,5 +46,8 @@ export function createAudioFacade() {
     playReroll() { sound.playReroll(); },
     playBanish() { sound.playBanish(); },
     playKillStreakNote(streakIndex) { sound.playKillStreakNote(streakIndex); },
+    playComboBreak() { sound.playComboBreak(); },
+    playNearMissWhoosh() { sound.playNearMissWhoosh(); },
+    playFeverStart() { sound.playFeverStart(); },
   };
 }
