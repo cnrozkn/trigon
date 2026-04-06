@@ -1,8 +1,8 @@
 # TRIGON — Product Requirements Document (PRD)
 
-> **Son Güncelleme:** 3 Nisan 2026  
-> **Versiyon:** 1.1.0  
-> **Durum:** Prototip (Aktif Geliştirme)
+> **Son Güncelleme:** 7 Nisan 2026  
+> **Versiyon:** 1.2.0  
+> **Durum:** Aktif Geliştirme (Modüler Mimari)
 
 ---
 
@@ -64,16 +64,17 @@ trigon/
 ├── capacitor.config.json   # Capacitor mobil yapılandırması
 ├── docs/                   # Proje dökümanları
 │   ├── PRD.md              # Bu döküman
-│   └── ROADMAP.md          # Eksikler ve geliştirme yol haritası
+│   └── RELEASE_CHECKLIST.md # Canlıya çıkış hazırlık kontrol listesi
 ├── ios/                    # (Capacitor) Native iOS projesi (cap add ios ile oluşur)
 ├── android/                # (Capacitor) Native Android projesi (cap add android ile oluşur)
 ├── dist/                   # Vite build çıktısı
 └── src/
     ├── main.js             # Oyun bootstrap (Phaser config, viewport sync)
-    └── scenes/
-        ├── Boot.js         # Texture üretimi (Graphics API ile runtime asset)
-        ├── Menu.js         # Başlık ekranı (TRIGON başlık, Tap to Play)
-        └── PlayScene.js    # Tüm oynanış mantığı (936 satır, monolitik)
+    ├── data/               # Veri tanımları (Constants, Upgrades)
+    ├── audio/              # Ses motoru ve SFX yönetimi
+    ├── scenes/             # Oyun sahneleri (Boot, Menu, Play, UI, Prestige, Achievements)
+    ├── systems/            # Oyun sistemleri (WaveManager, Collision, VFX, Background, Powerup)
+    └── utils/              # Yardımcı araçlar (Storage, Platform sync)
 ```
 
 ---
@@ -81,9 +82,9 @@ trigon/
 ## 4. Sahne Akışı
 
 ```
-Boot.js → Menu.js → PlayScene.js
+Boot.js → Menu.js → PlayScene.js (+ UIScene paralel)
                          ↓ (Game Over)
-                      Menu.js
+                      Menu.js / PrestigeShop.js
 ```
 
 ### 4.1 Boot.js — Texture Üretimi
@@ -114,9 +115,11 @@ Boot sahnesi Phaser Graphics API kullanarak tüm oyun texture'larını runtime'd
 - Herhangi bir dokunuşta → PlayScene'e geçiş
 - Responsive: resize event'e bağlı layout
 
-### 4.3 PlayScene.js — Oynanış (Monolitik, >2K satır)
+### 4.3 PlayScene.js — Oyun Orkestrasyonu
+Artık monolitik bir yapıdan ziyade, sistemleri yöneten bir orkestra şefi rolündedir.
 
-Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
+### 4.4 UIScene.js — Arayüz Yönetimi
+Tüm HUD (Skor, Level, Combo, Skill) ve Overlay'lerin (Pause, Game Over, Onboarding) yönetimini üstlenir. Event-based iletişim kullanılır.
 
 ---
 
@@ -213,14 +216,20 @@ Tüm oyun mantığını içerir. Aşağıda detaylı dökümü var.
 - shieldCharges = 0 → game over
 - Shield upgrade'i ile max 5'e kadar şarj biriktirilir
 
-### 5.7 Game Over
+### 5.7 Sistem Yöneticileri (Managers)
+- **VFXManager:** Tüm parçacık ve görsel efektlerin merkezi yönetimi.
+- **CollisionManager:** Fizik etkileşimleri ve hasar hesaplamalarının yönetimi.
+- **BackgroundManager:** Dinamik arkaplan, grid ve playfield görselleri.
+- **WaveManager:** Düşman dalgalarının ve progresyonun yönetimi.
+- **PowerupSystem:** Geçici buff ve efektlerin takibi.
 
-1. `gameOver = true` → tüm timer'lar durdurulur
-2. Kamera sarsıntısı: 500ms, intensity 0.025
-3. Ölüm partikülleri: 48 kare + 32 nokta
-4. Oyuncu fade-out: alpha → 0, scale → 0.2 (400ms)
-5. Gecikmeli olarak Game Over overlay açılır (score/level/kills/time/max combo/upgrades)
-6. Retry ve Menu butonları ile sahne geçişi yapılır
+### 5.8 Destekleyici Özellikler
+- **Fever Mode:** Hızlı düşman kesme ile dolan bar, aktifleştiğinde mermi hızını ve ateş oranını artırır.
+- **Combo/Streak:** Ardışık skorlarla artan katsayılar.
+- **Onboarding:** Yeni oyuncular için 3 adımlı eğitim süreci.
+- **Audio Engine:** Dinamik SFX ve müzik yönetimi, kullanıcı ayarlarının kalıcılığı.
+- **Achievement/Prestige:** Uzun vadeli progresyon mekanikleri.
+- **Game Over:** Özelleştirilmiş sonuç ekranı, istatistiklerin kaydedilmesi.
 
 ---
 
@@ -285,13 +294,8 @@ const BOSS_X_PAD = 56;             // Boss duvar mesafesi
 
 ## 9. Bilinen Kısıtlamalar (Mevcut Durum)
 
-1. **Ses sistemi yok** — müzik, SFX, ambient hiçbiri
-2. **Veri kalıcılığı yok** — high score, istatistik tutulmuyor
-3. **Game Over ekranı yok** — direkt menüye dönüş
-4. **Tek düşman tipi** — sadece daire + boss polygon
-5. **Kullanılmayan texture'lar** — 4 tane üretiliyor ama sahneye eklenmemiş
-6. **Monolitik kod** — PlayScene.js 936 satır, ayrıştırılmamış
-7. **Onboarding/Tutorial yok** — yeni oyuncu yönlendirilmiyor
-8. **Pause/Settings yok** — oyun duraklatılamıyor
-9. **Dil karışıklığı** — UI İngilizce, Banish açıklaması Türkçe
-10. **Combo/streak sistemi yok** — ardışık kill ödüllendirilmiyor
+1. **Performans Optimizasyonu** — Çok fazla mermi ve düşman olduğunda FPS düşüşleri.
+2. **Kısıtlı Düşman Hareketleri** — Düşman yapay zekası hala basit dikey/sinüs hareketlerle sınırlı.
+3. **Multi-Language Desteği** — Bazı kısımlar hala İngilizce/Türkçe karışık.
+4. **Boss Çeşitliliği** — Sadece 2 ana boss tipi mevcut, mekanikler geliştirilebilir.
+5. **Asset Pipeline** — Bazı efektler hala doğrudan kod içinde poligon çizimiyle yapılıyor, shader desteği eklenebilir.

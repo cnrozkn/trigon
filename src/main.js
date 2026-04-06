@@ -22,12 +22,13 @@ function showBootError(error) {
 async function startGame() {
   try {
     const Phaser = await import('phaser');
-    const [{ default: Boot }, { default: Menu }, { default: PlayScene }, { default: PrestigeShop }, { default: AchievementsScene }] = await Promise.all([
+    const [{ default: Boot }, { default: Menu }, { default: PlayScene }, { default: PrestigeShop }, { default: AchievementsScene }, { default: UIScene }] = await Promise.all([
       import('./scenes/Boot.js'),
       import('./scenes/Menu.js'),
       import('./scenes/PlayScene.js'),
       import('./scenes/PrestigeShop.js'),
       import('./scenes/AchievementsScene.js'),
+      import('./scenes/UIScene.js'),
     ]);
 
     applyAppHeightCss();
@@ -57,7 +58,7 @@ async function startGame() {
       input: {
         activePointers: 4,
       },
-      scene: [Boot, Menu, PlayScene, PrestigeShop, AchievementsScene],
+      scene: [Boot, Menu, PlayScene, PrestigeShop, AchievementsScene, UIScene],
     };
 
     const game = new Phaser.Game(config);

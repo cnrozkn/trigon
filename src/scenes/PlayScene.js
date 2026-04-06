@@ -3,6 +3,9 @@ import { checkNewAchievements } from '../systems/AchievementSystem.js';
 import { loadGameProfile, saveGameProfile, saveAudioSettings } from '../utils/Storage.js';
 import WaveManager from '../systems/WaveManager.js';
 import PowerupSystem from '../systems/PowerupSystem.js';
+import VFXManager from '../systems/VFXManager.js';
+import CollisionManager from '../systems/CollisionManager.js';
+import BackgroundManager from '../systems/BackgroundManager.js';
 import { buildEnemyConfig } from '../systems/EnemyFactory.js';
 import {
   applyGameOverCombatCleanup,
@@ -10,111 +13,41 @@ import {
   isGameplayActionPaused,
 } from '../systems/combatRuntime.js';
 
-const START_PLAYER_COUNT = 1;
-const MAX_PLAYER_COUNT = 6;
+import {
+  START_PLAYER_COUNT,
+  MAX_PLAYER_COUNT,
+  BASE_FIRE_MS,
+  MIN_FIRE_MS,
+  DRAFT_REROLLS,
+  COMBO_WINDOW_MS,
+  FEVER_STREAK_THRESHOLD,
+  FEVER_DURATION_MS,
+  FEVER_COOLDOWN_MS,
+  NEAR_MISS_RADIUS_PX,
+  NEAR_MISS_COOLDOWN_MS,
+  LEVEL_CLEAR_RETRY_MS,
+  DEATH_ORB_LIFETIME_MS,
+  DEATH_ORB_BASE_SPEED,
+  DEATH_ORB_ARM_DELAY_MS,
+  BULLET_HIT_LOCK_MS,
+  BULLET_PIERCE_IFRAME_MS,
+  BOSS_BASE_ATTACK_MS,
+  PLAYFIELD_MARGIN,
+  BOSS_X_PAD
+} from '../data/GameConstants.js';
 
-const BASE_FIRE_MS = 380;
-const MIN_FIRE_MS = 120;
+import {
+  UPGRADE_MAX,
+  SYNERGY_DEFS,
+  UPGRADE_DEFS,
+  ENDLESS_UPGRADE_DEFS,
+  playerTintForLevel,
+  enemyColorForLevel,
+  enemySpeedMultiplier,
+  regularEnemySpeedMultiplier,
+  backgroundToneForLevel
+} from '../data/UpgradeDefinitions.js';
 
-const DRAFT_REROLLS = 2;
-const COMBO_WINDOW_MS = 2500;
-const FEVER_STREAK_THRESHOLD = 60;
-const FEVER_DURATION_MS = 8000;
-const FEVER_COOLDOWN_MS = 1500;
-const NEAR_MISS_RADIUS_PX = 30;
-const NEAR_MISS_COOLDOWN_MS = 650;
-const LEVEL_CLEAR_RETRY_MS = 500;
-const DEATH_ORB_LIFETIME_MS = 1700;
-const DEATH_ORB_BASE_SPEED = 210;
-const DEATH_ORB_ARM_DELAY_MS = 120;
-const BULLET_HIT_LOCK_MS = 45;
-const BULLET_PIERCE_IFRAME_MS = 36;
-const BOSS_BASE_ATTACK_MS = 1650;
-
-/** Inner playfield inset from logical screen edges (enemy bounce + frame). */
-const PLAYFIELD_MARGIN = 22;
-/** Boss half-width-ish for horizontal clamp / wall reflection. */
-const BOSS_X_PAD = 56;
-
-/** Single source for caps (must match canOfferUpgrade / apply logic). */
-const UPGRADE_MAX = {
-  fire: 6,
-  damage: 5,
-  shield: 5,
-  triangle: MAX_PLAYER_COUNT,
-  pierce: 3,
-  multi: 2,
-  crit: 4,
-  frost: 3,
-  synergy_frost_nova: 1,
-  synergy_plasma_beam: 1,
-  synergy_explosive_armor: 1,
-};
-
-const SYNERGY_DEFS = [
-  { key: 'synergy_frost_nova', label: 'Frost Nova', desc: 'Max Frost + Multi', rarity: 'Legendary', weight: 8, color: 0xaaccff, requires: { frost: 3, multi: 2 } },
-  { key: 'synergy_plasma_beam', label: 'Plasma Beam', desc: 'Max Fire + Crit', rarity: 'Legendary', weight: 8, color: 0xff44aa, requires: { fire: 6, crit: 4 } },
-  { key: 'synergy_explosive_armor', label: 'Explosive Armor', desc: 'Max Shield + DMG', rarity: 'Legendary', weight: 8, color: 0xffaa22, requires: { shield: 5, damage: 5 } },
-];
-
-const UPGRADE_DEFS = [
-  { key: 'fire', label: 'Rapid Fire', desc: '+Fire rate', rarity: 'Common', weight: 6, color: 0x22cc88 },
-  { key: 'damage', label: 'Heavy Rounds', desc: '+Bullet damage', rarity: 'Common', weight: 6, color: 0xcc8822 },
-  { key: 'shield', label: 'Shield Core', desc: '+1 shield charge', rarity: 'Common', weight: 6, color: 0x4488ff },
-  { key: 'triangle', label: 'Tri-Fleet', desc: '+1 triangle', rarity: 'Rare', weight: 3, color: 0x55aaff },
-  { key: 'pierce', label: 'Piercing Shots', desc: '+bullet pierce', rarity: 'Rare', weight: 3, color: 0xffcc66 },
-  { key: 'multi', label: 'Multi Shot', desc: 'Add side bullets', rarity: 'Rare', weight: 3, color: 0xff66cc },
-  { key: 'crit', label: 'Critical Core', desc: '+crit chance', rarity: 'Rare', weight: 3, color: 0xff9966 },
-  { key: 'frost', label: 'Frost Rounds', desc: 'Hit can slow enemy', rarity: 'Epic', weight: 1, color: 0x66e6ff },
-];
-
-const ENDLESS_UPGRADE_DEFS = [
-  { key: 'endlessOverclock', label: 'Overclock Loop', desc: 'Slightly faster fire rate', rarity: 'Rare', weight: 2, color: 0x44ddaa, repeatable: true },
-  { key: 'endlessBounty', label: 'Bounty Protocol', desc: 'Small permanent score gain', rarity: 'Common', weight: 5, color: 0xffd36a, repeatable: true },
-  { key: 'endlessCloseCall', label: 'Close Call Engine', desc: 'Near-miss rewards improve', rarity: 'Epic', weight: 2, color: 0xff99cc, repeatable: true },
-];
-
-const COSMETIC_COLORS = {
-  pink: 0xff66cc,
-  lime: 0x66ff66,
-  gold: 0xffd700,
-};
-
-function playerTintForLevel(level, cosmeticId) {
-  if (cosmeticId && cosmeticId !== 'default' && COSMETIC_COLORS[cosmeticId]) {
-    return COSMETIC_COLORS[cosmeticId];
-  }
-  if (level < 5) return 0xffffff;
-  if (level < 10) return 0x00ff88;
-  if (level < 15) return 0x00ffff;
-  return 0xff66cc;
-}
-
-function enemyColorForLevel(level) {
-  if (level < 5) return 0xff66aa;
-  if (level < 10) return 0xff8877;
-  if (level < 15) return 0xffaa55;
-  return 0xff4444;
-}
-
-function enemySpeedMultiplier(level) {
-  return 0.8 + 2.2 / (1 + Math.exp(-0.25 * (level - 8)));
-}
-
-function regularEnemySpeedMultiplier(level) {
-  if (level <= 2) return 1;
-  if (level <= 6) return 1 + (level - 2) * 0.052;
-  if (level <= 12) return 1.208 + (level - 6) * 0.043;
-  if (level <= 15) return 1.48 + (level - 12) * 0.05;
-  return Math.min(2.45, 1.63 + (level - 15) * 0.075);
-}
-
-function backgroundToneForLevel(level) {
-  if (level < 5) return 0x0a1022;
-  if (level < 10) return 0x1a0d2a;
-  if (level < 15) return 0x2a1018;
-  return 0x2a1d08;
-}
 
 export default class PlayScene extends Phaser.Scene {
   constructor() {
@@ -186,23 +119,9 @@ export default class PlayScene extends Phaser.Scene {
     this.playfieldPulseWidth = 2;
     this.playfieldPulseTween = null;
 
-    this.bgTone = null;
-    this.bgGlow = null;
-    this.bgGridFar = null;
-    this.bgGridNear = null;
-    this.bgTargetTone = backgroundToneForLevel(1);
-    this.bgCurrentTone = this.bgTargetTone;
-    this.feverEdgeGlow = null;
-    this.lowShieldVignette = null;
-
-    this.trailLastAt = 0;
-    this.prevFormationX = 0;
-    this.shieldRingG = null;
-
-    this.muzzleFx = null;
-    this.bulletTrailFx = null;
-    this.impactFx = null;
-    this.geoBurst = null;
+    this.vfx = null;
+    this.collisions = null;
+    this.background = null;
 
     this.hitStopActive = false;
     this.hitStopRestoreId = null;
@@ -248,14 +167,8 @@ export default class PlayScene extends Phaser.Scene {
     this.onboardingPreviewBullet = null;
     this.onboardingEnemyPreview = null;
 
-    this.hudLevel = null;
-    this.hudWave = null;
-    this.hudCombo = null;
-    this.hudFever = null;
     this.progressBarBg = null;
-    this.progressBarFill = null;
     this.powerupBarBg = null;
-    this.powerupBarFill = null;
     this.powerupBarText = null;
   }
 
@@ -270,106 +183,11 @@ export default class PlayScene extends Phaser.Scene {
     this.physics.world.setBoundsCollision(true, true, false, false);
   }
 
-  drawPlayfieldFrame(width, height, lineWidth = this.playfieldPulseWidth || 2) {
-    if (this.playfieldFrame) this.playfieldFrame.destroy();
-    const g = this.add.graphics().setDepth(3);
-    g.lineStyle(lineWidth, 0x4a6a9a, 0.55);
-    g.strokeRect(this.playLeft + 1, 6, this.playRight - this.playLeft - 2, height - 12);
-    g.lineStyle(1, 0x223355, 0.35);
-    g.strokeRect(this.playLeft + 3, 8, this.playRight - this.playLeft - 6, height - 16);
-    this.playfieldFrame = g;
-  }
-
-  ensureStageOneTextures() {
-    if (!this.textures.exists('stage1_grid_line')) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.clear();
-      g.fillStyle(0x64b4ff, 0.08);
-      g.fillRect(0, 0, 2, 2);
-      g.generateTexture('stage1_grid_line', 2, 2);
-      g.destroy();
-    }
-
-    if (!this.textures.exists('particle_triangle')) {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.fillStyle(0xff99dd, 1);
-      g.beginPath();
-      g.moveTo(6, 0);
-      g.lineTo(0, 12);
-      g.lineTo(12, 12);
-      g.closePath();
-      g.fillPath();
-      g.generateTexture('particle_triangle', 12, 12);
-      g.destroy();
-    }
-  }
-
-  createBackgroundLayer(width, height) {
-    this.bgTone = this.add.rectangle(width * 0.5, height * 0.5, width, height, this.bgCurrentTone, 0.35).setDepth(-30);
-    this.bgGlow = this.add.ellipse(width * 0.5, height * 0.55, width * 1.2, height * 1.4, 0x4a3d88, 0.05).setDepth(-29);
-    this.bgGridFar = this.add.tileSprite(width * 0.5, height * 0.5, width, height, 'stage1_grid_line').setDepth(-28);
-    this.bgGridFar.setTint(0x64b4ff).setAlpha(0.12).setBlendMode(Phaser.BlendModes.ADD);
-    this.bgGridNear = this.add.tileSprite(width * 0.5, height * 0.5, width, height, 'stage1_grid_line').setDepth(-27);
-    this.bgGridNear.setTint(0x7a9fff).setAlpha(0.06).setBlendMode(Phaser.BlendModes.ADD).setScale(0.5);
-  }
-
-  refreshBackgroundLayout(width, height) {
-    if (this.bgTone) this.bgTone.setPosition(width * 0.5, height * 0.5).setSize(width, height);
-    if (this.bgGlow) this.bgGlow.setPosition(width * 0.5, height * 0.55).setSize(width * 1.2, height * 1.4);
-    if (this.bgGridFar) this.bgGridFar.setPosition(width * 0.5, height * 0.5).setSize(width, height);
-    if (this.bgGridNear) this.bgGridNear.setPosition(width * 0.5, height * 0.5).setSize(width, height);
-  }
-
-  handleResize(gameSize) {
-    const width = gameSize.width;
-    const height = gameSize.height;
-
-    this.applyPlayfieldWorldBounds(width, height);
-    this.drawPlayfieldFrame(width, height);
-    this.refreshBackgroundLayout(width, height);
-    this.playerBaseY = height - 90;
-
-    const minX = this.playLeft + this.playerHalfSpread;
-    const maxX = this.playRight - this.playerHalfSpread;
-    this.formationX = Phaser.Math.Clamp(this.formationX, minX, maxX);
-    this.targetFormationX = Phaser.Math.Clamp(this.targetFormationX, minX, maxX);
-    this.relayoutFleet();
-
-    this.layoutTopHud();
-    if (this.hudCombo) this.hudCombo.setPosition(width * 0.5, 88);
-    if (this.hudFever) this.hudFever.setPosition(width * 0.5, 128);
-    if (this.pauseButton) this.pauseButton.setPosition(width - 24, 24);
-
-    if (this.overlayBg) {
-      this.overlayBg.setPosition(width * 0.5, height * 0.5);
-      this.overlayBg.setSize(width, height);
-    }
-    if (this.screenFlash) this.screenFlash.setPosition(width * 0.5, height * 0.5).setSize(width, height);
-    if (this.feverEdgeGlow) this.feverEdgeGlow.setPosition(width * 0.5, height * 0.5).setSize(width, height);
-    if (this.lowShieldVignette) this.lowShieldVignette.setPosition(width * 0.5, height * 0.64).setSize(width * 1.3, height * 1.7);
-    if (this.isPausedByUser) this.renderPauseOverlay();
-    if (this.isGameOverScreenVisible) this.renderGameOverOverlay();
-    if (this.onboardingActive) this.renderOnboardingStep();
-
-    this.enemies.children.iterate((e) => {
-      if (!e || !e.active) return true;
-      e.x = Phaser.Math.Clamp(e.x, this.playLeft + 12, this.playRight - 12);
-      if (e.body) {
-        const prevVx = e.body.velocity.x;
-        const prevVy = e.body.velocity.y;
-        e.body.reset(e.x, e.y);
-        e.body.setVelocity(prevVx, prevVy);
-      }
-      return true;
-    });
-
-    if (this.isChoosingUpgrade) this.renderDraftModal();
-  }
-
   create() {
     const { width, height } = this.scale;
-    this.ensureStageOneTextures();
-    this.createBackgroundLayer(width, height);
+    this.background = new BackgroundManager(this);
+    this.background.create();
+    
     this.audio = this.registry.get('audio') || null;
     // Fallback unlock: menu tap should already resume; this covers slow resume or suspended tab.
     if (this.audio && typeof this.audio.resume === 'function') {
@@ -378,69 +196,11 @@ export default class PlayScene extends Phaser.Scene {
       });
     }
     this.applyPlayfieldWorldBounds(width, height);
-    this.drawPlayfieldFrame(width, height);
 
-    this.deathBurst = this.add.particles(0, 0, 'particle_square', {
-      speed: { min: 80, max: 320 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.9, end: 0 },
-      alpha: { start: 1, end: 0 },
-      lifespan: 450,
-      blendMode: 'ADD',
-      emitting: false,
-    });
+    this.vfx = new VFXManager(this);
+    this.vfx.create();
 
-    this.sparkle = this.add.particles(0, 0, 'particle_dot', {
-      speed: { min: 40, max: 180 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.8, end: 0 },
-      lifespan: 350,
-      tint: [0xff66cc, 0x66ffff, 0xffffff],
-      blendMode: 'ADD',
-      emitting: false,
-    });
-
-    this.geoBurst = this.add.particles(0, 0, 'particle_triangle', {
-      speed: { min: 70, max: 240 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.7, end: 0 },
-      alpha: { start: 0.75, end: 0 },
-      lifespan: 300,
-      blendMode: 'ADD',
-      emitting: false,
-    });
-
-    this.muzzleFx = this.add.particles(0, 0, 'particle_dot', {
-      speed: { min: 40, max: 130 },
-      angle: { min: -115, max: -65 },
-      scale: { start: 0.8, end: 0 },
-      alpha: { start: 0.9, end: 0 },
-      tint: [0xffffff, 0x88ffff],
-      lifespan: 80,
-      blendMode: 'ADD',
-      emitting: false,
-    });
-
-    this.bulletTrailFx = this.add.particles(0, 0, 'particle_dot', {
-      speed: { min: 0, max: 15 },
-      scale: { start: 0.45, end: 0 },
-      alpha: { start: 0.4, end: 0 },
-      tint: [0x88ffff, 0x66e6ff],
-      lifespan: 150,
-      blendMode: 'ADD',
-      emitting: false,
-    });
-
-    this.impactFx = this.add.particles(0, 0, 'particle_dot', {
-      speed: { min: 40, max: 210 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.75, end: 0 },
-      alpha: { start: 1, end: 0 },
-      tint: [0xffffff, 0x66ffff, 0xffdd88],
-      lifespan: 170,
-      blendMode: 'ADD',
-      emitting: false,
-    });
+    this.collisions = new CollisionManager(this);
 
     this.players = this.physics.add.group();
     this.bullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite, maxSize: 220 });
@@ -459,90 +219,17 @@ export default class PlayScene extends Phaser.Scene {
       .rectangle(width * 0.5, height * 0.5, width, height, 0xffffff, 0)
       .setDepth(260)
       .setVisible(false);
-    this.feverEdgeGlow = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0xff66dd, 0).setDepth(150);
-    this.lowShieldVignette = this.add.ellipse(width * 0.5, height * 0.64, width * 1.3, height * 1.7, 0xff4455, 0).setDepth(140);
 
     const startCount = this.shipClass === 'ghost' ? 2 : START_PLAYER_COUNT;
     for (let i = 0; i < startCount; i++) this.addPlayerToFleet();
 
-    this.hudSkill = this.add
-      .text(16, 38, 'Skill: Ready (Double Tap)', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '14px',
-        color: '#aaccff',
-      })
-      .setDepth(200)
-      .setScrollFactor(0);
-
-    this.hudScore = this.add
-      .text(16, 18, 'Score: 0', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '18px',
-        color: '#aaffff',
-      })
-      .setOrigin(0, 0.5)
-      .setDepth(100);
-    this.hudLevel = this.add
-      .text(16, 18, 'LV.1', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '15px',
-        fontStyle: 'bold',
-        color: '#ccddff',
-      })
-      .setOrigin(0, 0.5)
-      .setDepth(100);
-    this.hudWave = this.add
-      .text(16, 18, 'WAVE 0/0', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '13px',
-        fontStyle: 'bold',
-        color: '#9fd6ff',
-      })
-      .setOrigin(0, 0.5)
-      .setDepth(100);
-    this.hudCombo = this.add
-      .text(width * 0.5, 88, 'x0', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '34px',
-        fontStyle: 'bold',
-        color: '#ffe080',
-      })
-      .setOrigin(0.5)
-      .setDepth(110)
-      .setAlpha(0);
-    this.hudFever = this.add
-      .text(width * 0.5, 128, 'FEVER!', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '40px',
-        fontStyle: 'bold',
-        color: '#ff78ff',
-      })
-      .setOrigin(0.5)
-      .setDepth(112)
-      .setAlpha(0);
-    this.pauseButton = this.add
-      .text(width - 24, 24, '||', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '22px',
-        fontStyle: 'bold',
-        color: '#d7e8ff',
-      })
-      .setOrigin(1, 0.5)
-      .setDepth(120)
-      .setInteractive({ useHandCursor: true });
-    this.pauseButton.on('pointerdown', () => this.togglePauseByUser());
-
-    this.overlayBg = this.add
-      .rectangle(width * 0.5, height * 0.5, width, height, 0x04050a, 0)
-      .setDepth(180)
-      .setVisible(false);
     this.pauseOverlay = this.add.container(0, 0).setDepth(230).setVisible(false);
     this.gameOverOverlay = this.add.container(0, 0).setDepth(250).setVisible(false);
 
-    this.physics.add.overlap(this.bullets, this.enemies, this.onBulletHitEnemy, undefined, this);
-    this.physics.add.overlap(this.players, this.enemies, this.onPlayerHitEnemy, undefined, this);
-    this.physics.add.overlap(this.players, this.enemyBullets, this.onPlayerHitEnemyBullet, undefined, this);
-    this.physics.add.overlap(this.bullets, this.enemyBullets, this.onBulletHitEnemyBullet, undefined, this);
+    this.physics.add.overlap(this.bullets, this.enemies, this.collisions.onBulletHitEnemy, undefined, this.collisions);
+    this.physics.add.overlap(this.players, this.enemies, this.collisions.onPlayerHitEnemy, undefined, this.collisions);
+    this.physics.add.overlap(this.players, this.enemyBullets, this.collisions.onPlayerHitEnemyBullet, undefined, this.collisions);
+    this.physics.add.overlap(this.bullets, this.enemyBullets, this.collisions.onBulletHitEnemyBullet, undefined, this.collisions);
 
     this.resetFireTimer();
 
@@ -575,14 +262,18 @@ export default class PlayScene extends Phaser.Scene {
       }
     });
 
-    this.onResize = (gameSize) => this.handleResize(gameSize);
-    this.scale.on('resize', this.onResize);
+    this.scene.launch('UIScene');
+    this.events.on('save_audio_settings', () => {
+      if (this.audio) {
+        const settings = this.audio.getSettings();
+        saveAudioSettings(settings);
+      }
+    });
     this.updateHud();
     if (this.profile.totalGamesPlayed === 0) this.startOnboarding();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.onResize);
-      if (this.playfieldFrame) this.playfieldFrame.destroy();
-      this.playfieldFrame = null;
+      this.background.destroy();
       if (this.shieldRingG) this.shieldRingG.destroy();
       this.shieldRingG = null;
       if (this.hitStopRestoreId) {
@@ -599,7 +290,7 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    this.updateBackgroundFx(delta);
+    this.background.update(delta, this.currentLevel, this.feverActive, this.shieldCharges, this.gameOver, this.isChoosingUpgrade);
     const gameplayPaused = isGameplayActionPaused(this);
     // Keep pickup cleanup active even when gameplay is paused by overlays.
     this.powerupSystem?.update(this.time.now, { timersPaused: gameplayPaused });
@@ -613,6 +304,12 @@ export default class PlayScene extends Phaser.Scene {
     if (this.killStreak > 0 && this.time.now - this.lastKillAt > COMBO_WINDOW_MS) this.onComboBreak();
     if (this.killStreak > 1) this.updateComboHud();
 
+    // Bars Update
+    const levelProgress = this.waveManager?.getLevelProgress?.() ?? 0;
+    const powerupProgress = this.powerupSystem?.getPowerupProgress?.() ?? 0;
+    const powerupLabel = this.powerupSystem?.getPowerupLabel?.() ?? '';
+    this.events.emit('update_bars', levelProgress, powerupProgress, powerupLabel);
+
     if (this.synergyFrostNova > 0 && this.time.now >= this.nextFrostNovaAt && this.getActiveEnemyCount() > 0) {
       this.triggerFrostNova();
       this.nextFrostNovaAt = this.time.now + 2500;
@@ -624,13 +321,11 @@ export default class PlayScene extends Phaser.Scene {
     }
     this.updateBlackholes();
 
-    if (this.hudSkill) {
-      if (this.time.now >= (this.activeSkillCooldownUntil || 0)) {
-         this.hudSkill.setText('Skill: Ready (Double Tap)').setColor('#00ffcc');
-      } else {
-         const left = ((this.activeSkillCooldownUntil - this.time.now) / 1000).toFixed(1);
-         this.hudSkill.setText(`Skill: ${left}s`).setColor('#ffaaaa');
-      }
+    if (this.time.now >= (this.activeSkillCooldownUntil || 0)) {
+       this.events.emit('update_skill', 0);
+    } else {
+       const left = (this.activeSkillCooldownUntil - this.time.now) / 1000;
+       this.events.emit('update_skill', left);
     }
 
     const { width } = this.scale;
@@ -718,7 +413,7 @@ export default class PlayScene extends Phaser.Scene {
                    yoyo: true,
                    onYoyo: () => {
                       e.setPosition(targetX, targetY);
-                      if (this.sparkle) this.sparkle.explode(12, e.x, e.y);
+                      this.vfx.explodeSparkle(e.x, e.y, 12);
                    }
                 });
              }
@@ -792,43 +487,38 @@ export default class PlayScene extends Phaser.Scene {
     this.checkNearMisses();
   }
 
-  updateBackgroundFx(delta = 16.6) {
-    this.bgTargetTone = this.feverActive ? 0x3a0f46 : backgroundToneForLevel(this.currentLevel);
-    this.bgCurrentTone = Phaser.Display.Color.Interpolate.ColorWithColor(
-      Phaser.Display.Color.ValueToColor(this.bgCurrentTone),
-      Phaser.Display.Color.ValueToColor(this.bgTargetTone),
-      100,
-      4,
-    ).color;
+  handleResize(gameSize) {
+    const width = gameSize.width;
+    const height = gameSize.height;
 
-    if (this.bgTone) this.bgTone.setFillStyle(this.bgCurrentTone, this.feverActive ? 0.52 : 0.38);
-    if (this.bgGridFar) this.bgGridFar.tilePositionY -= (18 * delta) / 1000;
-    if (this.bgGridNear) this.bgGridNear.tilePositionY -= (11 * delta) / 1000;
-    if (this.bgGlow) {
-      const pulse = this.feverActive
-        ? 0.09 + (Math.sin(this.time.now * 0.0012) + 1) * 0.05
-        : 0.03 + (Math.sin(this.time.now * 0.00072) + 1) * 0.025;
-      this.bgGlow.setAlpha(pulse);
-      this.bgGlow.setFillStyle(this.feverActive ? 0xff44ee : 0x4a3d88, 1);
-    }
-    if (this.feverEdgeGlow) {
-      const edgePulse = this.feverActive ? 0.1 + (Math.sin(this.time.now * 0.0028) + 1) * 0.06 : 0;
-      this.feverEdgeGlow.setAlpha(edgePulse);
-    }
-    if (this.hudFever) {
-      if (this.feverActive) {
-        this.hudFever.setAlpha(0.75 + (Math.sin(this.time.now * 0.01) + 1) * 0.1);
-        this.hudFever.setScale(1 + Math.sin(this.time.now * 0.014) * 0.05);
-      } else {
-        this.hudFever.setAlpha(0);
-        this.hudFever.setScale(1);
+    this.background.handleResize();
+    this.applyPlayfieldWorldBounds(width, height);
+    this.playerBaseY = height - 90;
+
+    const minX = this.playLeft + this.playerHalfSpread;
+    const maxX = this.playRight - this.playerHalfSpread;
+    this.formationX = Phaser.Math.Clamp(this.formationX, minX, maxX);
+    this.targetFormationX = Phaser.Math.Clamp(this.targetFormationX, minX, maxX);
+    this.relayoutFleet();
+
+    if (this.screenFlash) this.screenFlash.setPosition(width * 0.5, height * 0.5).setSize(width, height);
+    if (this.isPausedByUser) this.renderPauseOverlay();
+    if (this.isGameOverScreenVisible) this.renderGameOverOverlay();
+    if (this.onboardingActive) this.renderOnboardingStep();
+
+    this.enemies.children.iterate((e) => {
+      if (!e || !e.active) return true;
+      e.x = Phaser.Math.Clamp(e.x, this.playLeft + 12, this.playRight - 12);
+      if (e.body) {
+        const prevVx = e.body.velocity.x;
+        const prevVy = e.body.velocity.y;
+        e.body.reset(e.x, e.y);
+        e.body.setVelocity(prevVx, prevVy);
       }
-    }
-    if (this.lowShieldVignette) {
-      const danger = this.shieldCharges === 1 && !this.gameOver && !this.isChoosingUpgrade;
-      const vignetteAlpha = danger ? 0.08 + (Math.sin(this.time.now * 0.0065) + 1) * 0.06 : 0;
-      this.lowShieldVignette.setAlpha(vignetteAlpha);
-    }
+      return true;
+    });
+
+    if (this.isChoosingUpgrade) this.renderDraftModal();
   }
 
   emitPlayerTrail() {
@@ -871,20 +561,19 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   emitMuzzleFlash(x, y) {
-    if (this.muzzleFx) this.muzzleFx.explode(4, x, y);
+    this.vfx.emitMuzzle(x, y, 4);
   }
 
   emitBulletTrail(bullet, intervalMs = 34) {
-    if (!this.bulletTrailFx) return;
     const nextAt = bullet.getData('trailAt') || 0;
     if (this.time.now < nextAt) return;
-    this.bulletTrailFx.explode(1, bullet.x, bullet.y + 8);
+    this.vfx.emitTrail(bullet.x, bullet.y + 8, 1);
     bullet.setData('trailAt', this.time.now + intervalMs);
   }
 
   emitImpactBurst(x, y, crit) {
-    if (this.impactFx) this.impactFx.explode(crit ? 10 : 5, x, y);
-    if (this.geoBurst) this.geoBurst.explode(crit ? 8 : 4, x, y);
+    this.vfx.emitImpact(x, y, crit ? 10 : 5);
+    this.vfx.explodeGeo(x, y, crit ? 8 : 4);
     if (crit) this.showFloatingText('+CRIT', x, y - 14, { color: '#ffdd77', size: 20, duration: 520 });
   }
 
@@ -1065,6 +754,7 @@ export default class PlayScene extends Phaser.Scene {
       duration: 1000,
       scaleFrom: 0.55,
     });
+    this.events.emit('fever_start');
     this.audio?.playFeverStart?.();
     this.resetFireTimer();
   }
@@ -1073,6 +763,7 @@ export default class PlayScene extends Phaser.Scene {
     if (!this.feverActive) return;
     this.feverActive = false;
     this.feverEndsAt = 0;
+    this.events.emit('fever_end');
     this.resetFireTimer();
   }
 
@@ -1179,28 +870,17 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   updateHud() {
-    this.hudScore?.setText(`Score: ${this.score}`);
-    this.hudLevel?.setText(`LV.${this.currentLevel}`);
+    this.events.emit('update_score', this.score);
+    this.events.emit('update_level', this.currentLevel);
     const waveCtx = this.waveManager?.getWaveContext?.();
-    if (waveCtx && this.hudWave) {
+    if (waveCtx) {
       const waveNo = Math.max(0, waveCtx.waveIndex + 1);
-      this.hudWave.setText(`WAVE ${waveNo}/${waveCtx.totalWaves}`);
+      this.events.emit('update_wave', waveNo, waveCtx.totalWaves);
     }
-    this.layoutTopHud();
-    this.updateComboHud();
   }
 
   updateComboHud() {
-    if (!this.hudCombo) return;
-    if (this.killStreak > 1) {
-      const info = this.getComboTierInfo();
-      const left = Math.max(0, COMBO_WINDOW_MS - (this.time.now - this.lastKillAt));
-      this.hudCombo.setText(`${info.comboLabel}  STREAK ${this.killStreak}  ${Math.ceil(left / 1000)}s`);
-      this.hudCombo.setColor(info.color);
-      this.hudCombo.setAlpha(1);
-    } else {
-      this.hudCombo.setAlpha(0);
-    }
+    this.events.emit('update_combo', this.killStreak);
   }
 
   setPlayflowPaused(paused) {
@@ -1220,11 +900,9 @@ export default class PlayScene extends Phaser.Scene {
     this.isPausedByUser = !this.isPausedByUser;
     if (this.isPausedByUser) {
       this.setPlayflowPaused(true);
-      this.renderPauseOverlay();
-      this.overlayBg.setVisible(true).setAlpha(0.68);
+      this.events.emit('show_pause', this.audio?.getSettings?.() || { sfxVolume: 0.85 });
     } else {
-      if (this.pauseOverlay) this.pauseOverlay.setVisible(false);
-      this.overlayBg.setVisible(false).setAlpha(0);
+      this.events.emit('hide_pause');
       this.setPlayflowPaused(false);
       if (this.levelClearPending && !this.gameOver && !this.isChoosingUpgrade) {
         this.time.delayedCall(80, () => this.tryOpenLevelTransition());
@@ -1232,183 +910,26 @@ export default class PlayScene extends Phaser.Scene {
     }
   }
 
-  renderPauseOverlay() {
-    if (!this.pauseOverlay) return;
-    this.pauseOverlay.removeAll(true);
-    const { width, height } = this.scale;
-    const audioSettings = this.audio?.getSettings?.() || { sfxVolume: 0.85 };
-    const panel = this.add
-      .rectangle(width * 0.5, height * 0.53, width * 0.84, height * 0.62, 0x0c1220, 0.93)
-      .setStrokeStyle(2, 0x5d84b6, 0.9);
+  // renderPauseOverlay moved to UIScene.js
 
-    const title = this.add
-      .text(width * 0.5, height * 0.32, 'PAUSED', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '40px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-
-    const makeBtn = (label, y, handler) =>
-      this.add
-        .text(width * 0.5, y, label, {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '22px',
-          fontStyle: 'bold',
-          color: '#d9ebff',
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', handler);
-
-    const createVolumeSlider = (label, y, value, onChange) => {
-      const title = this.add
-        .text(width * 0.5 - 120, y, label, {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '15px',
-          fontStyle: 'bold',
-          color: '#c9daef',
-        })
-        .setOrigin(0, 0.5);
-
-      const barW = 170;
-      const barH = 12;
-      const barX = width * 0.5 - 8;
-      const bg = this.add
-        .rectangle(barX, y, barW, barH, 0x1a2a40, 0.95)
-        .setOrigin(0, 0.5)
-        .setStrokeStyle(1, 0x6a89ad, 0.8)
-        .setInteractive({ useHandCursor: true });
-      const fill = this.add.rectangle(barX, y, barW * Phaser.Math.Clamp(value, 0, 1), barH, 0x76c3ff, 1).setOrigin(0, 0.5);
-      const knob = this.add.circle(barX + barW * Phaser.Math.Clamp(value, 0, 1), y, 8, 0xe9f4ff, 1).setStrokeStyle(2, 0x5fa8e0, 1);
-      const pct = this.add
-        .text(barX + barW + 14, y, `${Math.round(Phaser.Math.Clamp(value, 0, 1) * 100)}`, {
-          fontFamily: 'ui-monospace, monospace',
-          fontSize: '13px',
-          color: '#d6e8ff',
-        })
-        .setOrigin(0, 0.5);
-
-      const update = (worldX) => {
-        const ratio = Phaser.Math.Clamp((worldX - barX) / barW, 0, 1);
-        fill.width = Math.max(2, barW * ratio);
-        knob.x = barX + barW * ratio;
-        pct.setText(`${Math.round(ratio * 100)}`);
-        onChange(ratio);
-      };
-
-      bg.on('pointerdown', (pointer) => {
-        update(pointer.worldX);
-        if (this.audio) {
-          const settings = this.audio.getSettings();
-          saveAudioSettings(settings);
-        }
-      });
-      
-      knob.setInteractive({ useHandCursor: true, draggable: true });
-      knob.on('drag', (pointer) => {
-        update(pointer.worldX);
-      });
-      
-      knob.on('dragend', (pointer) => {
-        const settings = this.audio.getSettings();
-        saveAudioSettings(settings);
-      });
-
-      return [title, bg, fill, knob, pct];
-    };
-
-    const sfxSliderItems = createVolumeSlider('SFX', height * 0.455, audioSettings.sfxVolume ?? 0.85, (v) => {
-      this.audio?.setSfxVolume(v);
-    });
-
-    const resume = makeBtn('Resume', height * 0.56, () => this.togglePauseByUser());
-    const restart = makeBtn('Restart', height * 0.635, () => this.scene.restart());
-    const menu = makeBtn('Menu', height * 0.71, () => this.scene.start('Menu'));
-
-    this.pauseOverlay.add([panel, title, ...sfxSliderItems, resume, restart, menu]);
-    this.pauseOverlay.setVisible(true);
-  }
 
   startOnboarding() {
     if (this.onboardingActive) return;
     this.onboardingActive = true;
     this.onboardingIndex = 0;
-    if (this.pauseButton) this.pauseButton.setVisible(false);
+    this.events.emit('toggle_ui_visibility', false);
     this.setPlayflowPaused(true);
-    this.overlayBg.setVisible(true).setAlpha(0.62);
     this.renderOnboardingStep();
   }
 
   renderOnboardingStep() {
-    if (this.onboardingOverlay) this.onboardingOverlay.destroy(true);
-    const { width, height } = this.scale;
     const steps = [
-      {
-        title: 'Move',
-        body: 'Drag to move your fleet.',
-      },
-      {
-        title: 'Fire',
-        body: 'Your fleet fires automatically.',
-      },
-      {
-        title: 'Dodge',
-        body: 'Avoid colliding with enemies. Stay alive.',
-      },
+      { title: 'Move', body: 'Drag to move your fleet.' },
+      { title: 'Fire', body: 'Your fleet fires automatically.' },
+      { title: 'Dodge', body: 'Avoid colliding with enemies. Stay alive.' },
     ];
     const step = steps[this.onboardingIndex] || steps[steps.length - 1];
-    const container = this.add.container(0, 0).setDepth(245);
-    const panel = this.add.rectangle(width * 0.5, height * 0.5, width * 0.82, height * 0.46, 0x0d1320, 0.95).setStrokeStyle(2, 0x66aaff, 0.9);
-    const title = this.add
-      .text(width * 0.5, height * 0.37, step.title, {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '34px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-    const body = this.add
-      .text(width * 0.5, height * 0.47, step.body, {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '20px',
-        color: '#d8e8ff',
-        align: 'center',
-      })
-      .setOrigin(0.5);
-    const indicator = this.add
-      .text(width * 0.5, height * 0.67, `Step ${this.onboardingIndex + 1}/3 — Tap to continue`, {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '14px',
-        color: '#9db2cc',
-      })
-      .setOrigin(0.5);
-
-    const demoItems = [];
-    if (this.onboardingIndex === 0) {
-      const arrow = this.add.text(width * 0.5, height * 0.56, '<   >', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '24px',
-        color: '#88ddff',
-      }).setOrigin(0.5);
-      this.tweens.add({ targets: arrow, x: width * 0.5 + 70, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      demoItems.push(arrow);
-      this.onboardingArrow = arrow;
-    } else if (this.onboardingIndex === 1) {
-      const bullet = this.add.image(width * 0.5, height * 0.6, 'bullet').setScale(1.4);
-      this.tweens.add({ targets: bullet, y: height * 0.53, alpha: 0.3, duration: 450, repeat: -1 });
-      demoItems.push(bullet);
-      this.onboardingPreviewBullet = bullet;
-    } else {
-      const enemy = this.add.image(width * 0.5, height * 0.6, 'enemy').setScale(1.2).setTint(0xff6688);
-      this.tweens.add({ targets: enemy, y: height * 0.65, duration: 700, yoyo: true, repeat: -1 });
-      demoItems.push(enemy);
-      this.onboardingEnemyPreview = enemy;
-    }
-
-    container.add([panel, title, body, indicator, ...demoItems]);
-    this.onboardingOverlay = container;
+    this.events.emit('show_onboarding', { ...step, index: this.onboardingIndex });
 
     if (this.onboardingTimer) this.onboardingTimer.remove(false);
     this.onboardingTimer = this.time.delayedCall(2000, () => this.advanceOnboarding());
@@ -1419,15 +940,12 @@ export default class PlayScene extends Phaser.Scene {
     this.onboardingIndex += 1;
     if (this.onboardingIndex >= 3) {
       this.onboardingActive = false;
-      if (this.onboardingOverlay) {
-        this.onboardingOverlay.destroy(true);
-        this.onboardingOverlay = null;
-      }
+      this.events.emit('hide_onboarding');
+      this.events.emit('toggle_ui_visibility', true);
       if (this.onboardingTimer) {
         this.onboardingTimer.remove(false);
         this.onboardingTimer = null;
       }
-      this.overlayBg.setVisible(false).setAlpha(0);
       this.setPlayflowPaused(false);
       if (this.pauseButton) this.pauseButton.setVisible(true);
       return;
@@ -1436,92 +954,12 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   renderGameOverOverlay() {
-    if (!this.gameOverOverlay) return;
-    this.gameOverOverlay.removeAll(true);
-    const { width, height } = this.scale;
     const result = this.gameOverResult || this.persistRunStats();
-    const run = result.run;
-    const profile = result.profile;
-    const upgrades = run.selectedUpgrades.length > 0 ? run.selectedUpgrades.join(', ') : '-';
-    const panelWidth = Math.min(width * 0.9, 560);
-    const panelHeight = Math.min(height * 0.78, 620);
-    const panelX = (width - panelWidth) * 0.5;
-    const panelY = Math.max(24, height * 0.1);
-    const panelBottom = panelY + panelHeight;
-
-    const panel = this.add.graphics();
-    panel.fillStyle(0x0b1020, 0.9);
-    panel.lineStyle(2, 0x5c8fcf, 0.72);
-    panel.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, 20);
-    panel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 20);
-
-    const title = this.add
-      .text(width * 0.5, panelY + 74, 'GAME OVER', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '46px',
-        fontStyle: 'bold',
-        color: '#ff6677',
-      })
-      .setOrigin(0.5);
-
-    const lines = [
-      `Score: ${run.score}`,
-      `Level: ${run.level}`,
-      result.isNewBest ? 'NEW BEST!' : `Best: ${profile.highScore}`,
-      `Kills: ${run.runKills}`,
-      `Time: ${this.formatDuration(run.runDurationMs)}`,
-      `Max Combo: x${run.maxCombo}`,
-      `Upgrades: ${upgrades}`,
-      `Earned: ${run.coinsCollected} coins`,
-    ];
-
-    const stats = this.add
-      .text(width * 0.5, panelY + panelHeight * 0.5, lines.join('\n'), {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '18px',
-        color: '#e6f1ff',
-        align: 'center',
-        lineSpacing: 6,
-        wordWrap: { width: panelWidth - 46 },
-      })
-      .setOrigin(0.5);
-
-    const retry = this.add
-      .text(width * 0.5, panelBottom - 86, 'Tap to Retry', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '26px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.scene.restart());
-
-    const menu = this.add
-      .text(width * 0.5, panelBottom - 42, 'Menu', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '20px',
-        color: '#cce0ff',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.scene.start('Menu'));
-
-    this.gameOverOverlay.add([panel, title, stats, retry, menu]);
-    this.gameOverOverlay.setVisible(true);
+    this.events.emit('show_game_over', result);
   }
 
-  layoutTopHud() {
-    if (!this.hudScore || !this.hudLevel || !this.hudWave) return;
-    const topY = 18;
-    const leftX = 16;
-    const gap = 14;
-    this.hudScore.setPosition(leftX, topY);
-    const levelX = leftX + this.hudScore.width + gap;
-    this.hudLevel.setPosition(levelX, topY);
-    const waveX = levelX + this.hudLevel.width + gap;
-    this.hudWave.setPosition(waveX, topY);
-  }
+  // layoutTopHud moved to UIScene.js
+
 
   getCurrentFireDelay() {
     const levelReduction = Math.floor((this.currentLevel - 1) / 2) * 12;
@@ -2247,121 +1685,7 @@ export default class PlayScene extends Phaser.Scene {
     });
   }
 
-  onBulletHitEnemy(bullet, enemy) {
-    if (!bullet.active || !enemy.active || this.gameOver) return;
-    const now = this.time.now;
-    const hitLockUntil = bullet.getData('hitLockUntil') || 0;
-    if (hitLockUntil > now) return;
-    bullet.setData('hitLockUntil', now + BULLET_HIT_LOCK_MS);
-    const pierceLeft = bullet.getData('pierceLeft') || 0;
-    const hasPierceThrough = pierceLeft > 0 || this.powerupSystem?.hasPierceBuff?.() || this.feverActive;
-    const kind = bullet.getData('bulletKind') || 'core';
-
-    const crit = Math.random() < this.getCritChance();
-    const kindMult = kind === 'plasma_beam' ? 5 : kind === 'frost_nova' ? 2 : kind === 'arc' ? 0.72 : kind === 'side' ? 0.86 : 1;
-    const damage = Math.max(1, Math.round(this.getBulletDamage() * kindMult * (crit ? 2 : 1)));
-    this.audio?.playHit();
-    if (crit) {
-      this.audio?.playCrit();
-      this.showQuickFlash(0.18, 50);
-    }
-
-    const shieldHp = enemy.getData('shieldHp') || 0;
-    if (shieldHp > 0) {
-      const sideHit = Math.abs(bullet.x - enemy.x) > 10;
-      if (!sideHit && !hasPierceThrough) {
-        enemy.setData('shieldHp', Math.max(0, shieldHp - damage));
-        this.showFloatingText('BLOCK', enemy.x, enemy.y - 10, { color: '#9feaff', size: 13, duration: 380 });
-        this.emitImpactBurst(enemy.x, enemy.y, false);
-        this.recycleBullet(bullet);
-        return;
-      }
-    }
-
-    const hp = enemy.getData('health') - damage;
-    enemy.setData('health', hp);
-    const txt = enemy.getData('healthText');
-    if (txt) txt.setText(String(Math.max(0, hp)));
-
-    enemy.setTint(crit ? 0xffffaa : 0xffaaaa);
-
-    let frostApplied = false;
-    if (this.frostLevel > 0 && Math.random() < this.frostLevel * 0.18) {
-      enemy.setData('slowUntil', this.time.now + 1400 + this.frostLevel * 350);
-      frostApplied = true;
-    }
-
-    this.emitImpactBurst(enemy.x, enemy.y, crit);
-    this.showDamagePopup(enemy.x, enemy.y, damage, crit, frostApplied);
-
-    this.time.delayedCall(70, () => {
-      if (enemy.active) enemy.setTint(enemyColorForLevel(this.currentLevel));
-    });
-
-    if (hp <= 0) this.killEnemy(enemy);
-    if (kind === 'arc' && hp > 0) {
-      const splash = Math.max(1, Math.floor(damage * 0.45));
-      this.applySplashDamage(enemy, splash);
-    }
-    if (pierceLeft > 0) {
-      const vx = bullet.body.velocity.x;
-      const vy = bullet.body.velocity.y;
-      bullet.setData('pierceLeft', Math.max(0, pierceLeft - 1));
-      bullet.y -= 14;
-      bullet.body.reset(bullet.x, bullet.y);
-      bullet.setVelocity(vx, vy);
-      bullet.body.checkCollision.none = true;
-      this.time.delayedCall(BULLET_PIERCE_IFRAME_MS, () => {
-        if (bullet.active) bullet.body.checkCollision.none = false;
-      });
-      if (pierceLeft >= 2) {
-        this.showFloatingText(`PIERCE x${pierceLeft}`, bullet.x, bullet.y - 10, {
-          color: '#ffd58a',
-          size: 10,
-          duration: 160,
-        });
-      }
-      bullet.setAlpha(0.9);
-      this.time.delayedCall(60, () => {
-        if (bullet.active) bullet.setAlpha(1);
-      });
-      return;
-    }
-    this.recycleBullet(bullet);
-  }
-
-  applySplashDamage(sourceEnemy, splashDamage) {
-    const radiusSq = 54 * 54;
-    this.enemies.children.iterate((candidate) => {
-      if (!candidate || !candidate.active || candidate === sourceEnemy || candidate.getData('isBoss')) return true;
-      const dx = candidate.x - sourceEnemy.x;
-      const dy = candidate.y - sourceEnemy.y;
-      if (dx * dx + dy * dy > radiusSq) return true;
-      const hp = (candidate.getData('health') || 1) - splashDamage;
-      candidate.setData('health', hp);
-      const txt = candidate.getData('healthText');
-      if (txt) txt.setText(String(Math.max(0, hp)));
-      this.showFloatingText(`-${splashDamage}`, candidate.x, candidate.y - 8, { color: '#ffb2ff', size: 10, duration: 180 });
-      if (hp <= 0) this.killEnemy(candidate);
-      return true;
-    });
-  }
-
-  onBulletHitEnemyBullet(playerBullet, enemyBullet) {
-    if (!playerBullet.active || !enemyBullet.active) return;
-    const pierceLeft = playerBullet.getData('pierceLeft') || 0;
-    if (pierceLeft > 0) {
-      playerBullet.setData('pierceLeft', Math.max(0, pierceLeft - 1));
-      playerBullet.body.checkCollision.none = true;
-      this.time.delayedCall(BULLET_PIERCE_IFRAME_MS, () => {
-        if (playerBullet.active) playerBullet.body.checkCollision.none = false;
-      });
-    } else {
-      this.recycleBullet(playerBullet);
-    }
-    this.recycleEnemyBullet(enemyBullet);
-    this.emitImpactBurst(enemyBullet.x, enemyBullet.y, false);
-  }
+  // Collision handlers moved to CollisionManager.js
 
   killEnemy(enemy) {
     const x = enemy.x;
@@ -2374,9 +1698,9 @@ export default class PlayScene extends Phaser.Scene {
       this.triggerBossDeathFx();
     } else this.audio?.playEnemyDeath();
 
-    this.sparkle.explode(isBoss ? 28 : 14, x, y);
-    this.deathBurst.explode(isBoss ? 36 : 18, x, y);
-    if (this.geoBurst) this.geoBurst.explode(isBoss ? 20 : 9, x, y);
+    this.vfx.explodeSparkle(x, y, isBoss ? 28 : 14);
+    this.vfx.explodeDeath(x, y, isBoss ? 36 : 18);
+    this.vfx.explodeGeo(x, y, isBoss ? 20 : 9);
     this.emitEnemyWireframe(enemy, isBoss);
 
     if (enemy.getData('splitOnDeath') && !isBoss) {
@@ -2732,44 +2056,7 @@ export default class PlayScene extends Phaser.Scene {
     if (this.levelClearPending) this.startNextLevel();
   }
 
-  onPlayerHitEnemy(player, enemy) {
-    if (this.gameOver || !enemy.active || this.isChoosingUpgrade) return;
-
-    if (this.shieldCharges > 0) {
-      this.shieldFlashIndex = this.shieldCharges - 1;
-      this.shieldFlashUntil = this.time.now + 220;
-      this.shieldCharges -= 1;
-      this.tookDamageInLevel = true;
-      this.audio?.playShieldAbsorb();
-      this.killEnemy(enemy);
-      if (this.synergyExplosiveArmor > 0) this.triggerExplosiveArmor();
-      this.updateHud();
-      return;
-    }
-
-    this.triggerGameOver(player);
-  }
-
-  onPlayerHitEnemyBullet(player, bullet) {
-    if (this.gameOver || !bullet.active || this.isChoosingUpgrade) return;
-    const isDeathOrb = Boolean(bullet.getData('isDeathOrb'));
-    this.recycleEnemyBullet(bullet);
-    if (this.shieldCharges > 0) {
-      this.shieldFlashIndex = this.shieldCharges - 1;
-      this.shieldFlashUntil = this.time.now + 220;
-      this.shieldCharges -= 1;
-      this.tookDamageInLevel = true;
-      this.audio?.playShieldAbsorb();
-      if (isDeathOrb) {
-        this.showFloatingText('ORB BLOCK', player.x, player.y - 22, { color: '#ff9aa8', size: 12, duration: 340 });
-      }
-      if (this.synergyExplosiveArmor > 0) this.triggerExplosiveArmor();
-      this.updateHud();
-      return;
-    }
-    if (isDeathOrb) this.showQuickFlash(0.2, 80);
-    this.triggerGameOver(player);
-  }
+  // Player collision handlers moved to CollisionManager.js
 
   recycleBullet(bullet) {
     this.bullets.killAndHide(bullet);
@@ -2825,8 +2112,8 @@ export default class PlayScene extends Phaser.Scene {
     const x = playerSprite ? playerSprite.x : this.formationX;
     const y = playerSprite ? playerSprite.y : this.playerBaseY;
 
-    this.deathBurst.explode(48, x, y);
-    this.sparkle.explode(32, x, y);
+    this.vfx.explodeDeath(x, y, 48);
+    this.vfx.explodeSparkle(x, y, 32);
 
     this.players.children.iterate((p) => {
       if (p && p.active) {
