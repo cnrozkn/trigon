@@ -46,7 +46,16 @@ const UPGRADE_MAX = {
   multi: 2,
   crit: 4,
   frost: 3,
+  synergy_frost_nova: 1,
+  synergy_plasma_beam: 1,
+  synergy_explosive_armor: 1,
 };
+
+const SYNERGY_DEFS = [
+  { key: 'synergy_frost_nova', label: 'Frost Nova', desc: 'Max Frost + Multi', rarity: 'Legendary', weight: 8, color: 0xaaccff, requires: { frost: 3, multi: 2 } },
+  { key: 'synergy_plasma_beam', label: 'Plasma Beam', desc: 'Max Fire + Crit', rarity: 'Legendary', weight: 8, color: 0xff44aa, requires: { fire: 6, crit: 4 } },
+  { key: 'synergy_explosive_armor', label: 'Explosive Armor', desc: 'Max Shield + DMG', rarity: 'Legendary', weight: 8, color: 0xffaa22, requires: { shield: 5, damage: 5 } },
+];
 
 const UPGRADE_DEFS = [
   { key: 'fire', label: 'Rapid Fire', desc: '+Fire rate', rarity: 'Common', weight: 6, color: 0x22cc88 },
@@ -115,6 +124,7 @@ export default class PlayScene extends Phaser.Scene {
   init(data) {
     this.challenge = data?.challenge || null;
     this.mutators = this.challenge?.mutators || {};
+    this.shipClass = data?.shipClass || 'striker';
 
     const profile = loadGameProfile();
     this.profile = profile;
@@ -139,6 +149,12 @@ export default class PlayScene extends Phaser.Scene {
     this.damageLevel = u.baseDamage || 0;
     this.shieldCharges = this.mutators.noShields ? 0 : (u.baseShield || 0);
     this.nearMissOffset = (u.nearMissRange || 0) * 10;
+
+    if (this.shipClass === 'heavy') {
+      this.damageLevel += 1;
+      this.shieldCharges = this.mutators.noShields ? 0 : this.shieldCharges + 1;
+      this.fireRateLevel = -1;
+    }
     this.coinBoost = u.coinMultiplier || 0;
     this.extraRerolls = u.extraReroll || 0;
     this.difficultyOffset = Object.values(u).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
@@ -147,6 +163,12 @@ export default class PlayScene extends Phaser.Scene {
     this.multishotLevel = 0;
     this.critLevel = 0;
     this.frostLevel = 0;
+
+    this.synergyFrostNova = 0;
+    this.synergyPlasmaBeam = 0;
+    this.synergyExplosiveArmor = 0;
+    this.nextFrostNovaAt = 0;
+    this.nextPlasmaBeamAt = 0;
 
     this.coinsCollected = 0;
 
@@ -424,6 +446,8 @@ export default class PlayScene extends Phaser.Scene {
     this.bullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite, maxSize: 220 });
     this.enemyBullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite, maxSize: 260 });
     this.enemies = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite });
+    this.blackholes = this.add.group();
+    this.nextBlackholeAt = 10000;
 
     this.playerBaseY = height - 90;
     this.formationX = width / 2;
@@ -438,7 +462,17 @@ export default class PlayScene extends Phaser.Scene {
     this.feverEdgeGlow = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0xff66dd, 0).setDepth(150);
     this.lowShieldVignette = this.add.ellipse(width * 0.5, height * 0.64, width * 1.3, height * 1.7, 0xff4455, 0).setDepth(140);
 
-    for (let i = 0; i < START_PLAYER_COUNT; i++) this.addPlayerToFleet();
+    const startCount = this.shipClass === 'ghost' ? 2 : START_PLAYER_COUNT;
+    for (let i = 0; i < startCount; i++) this.addPlayerToFleet();
+
+    this.hudSkill = this.add
+      .text(16, 38, 'Skill: Ready (Double Tap)', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        color: '#aaccff',
+      })
+      .setDepth(200)
+      .setScrollFactor(0);
 
     this.hudScore = this.add
       .text(16, 18, 'Score: 0', {
@@ -531,7 +565,14 @@ export default class PlayScene extends Phaser.Scene {
         this.advanceOnboarding();
         return;
       }
-      if (!this.gameOver && !this.isChoosingUpgrade) this.targetFormationX = pointer.worldX;
+      if (!this.gameOver && !this.isChoosingUpgrade) {
+          this.targetFormationX = pointer.worldX;
+          const now = this.time.now;
+          if (now - (this.lastTapTime || 0) < 250) {
+              this.triggerActiveSkill();
+          }
+          this.lastTapTime = now;
+      }
     });
 
     this.onResize = (gameSize) => this.handleResize(gameSize);
@@ -571,6 +612,26 @@ export default class PlayScene extends Phaser.Scene {
     if (this.feverActive && this.time.now >= this.feverEndsAt) this.endFeverMode();
     if (this.killStreak > 0 && this.time.now - this.lastKillAt > COMBO_WINDOW_MS) this.onComboBreak();
     if (this.killStreak > 1) this.updateComboHud();
+
+    if (this.synergyFrostNova > 0 && this.time.now >= this.nextFrostNovaAt && this.getActiveEnemyCount() > 0) {
+      this.triggerFrostNova();
+      this.nextFrostNovaAt = this.time.now + 2500;
+    }
+
+    if (this.currentLevel >= 5 && !this.levelClearPending && this.time.now >= this.nextBlackholeAt) {
+      this.spawnBlackhole();
+      this.nextBlackholeAt = this.time.now + Phaser.Math.Between(18000, 26000);
+    }
+    this.updateBlackholes();
+
+    if (this.hudSkill) {
+      if (this.time.now >= (this.activeSkillCooldownUntil || 0)) {
+         this.hudSkill.setText('Skill: Ready (Double Tap)').setColor('#00ffcc');
+      } else {
+         const left = ((this.activeSkillCooldownUntil - this.time.now) / 1000).toFixed(1);
+         this.hudSkill.setText(`Skill: ${left}s`).setColor('#ffaaaa');
+      }
+    }
 
     const { width } = this.scale;
     const minX = this.playLeft + this.playerHalfSpread;
@@ -639,6 +700,29 @@ export default class PlayScene extends Phaser.Scene {
           const freq = e.getData('zigzagFreq') || 4.4;
           e.setVelocityX(Math.sin((e.getData('zigzagSeed') || 0) + t * freq) * amp * slowMult);
           e.setVelocityY(vy);
+        } else if (enemyType === 'teleporter') {
+          e.setVelocityX((e.getData('baseVx') || 0) * slowMult);
+          e.setVelocityY(vy);
+          const nextTeleAt = e.getData('nextTeleportAt') || 0;
+          if (this.time.now >= nextTeleAt) {
+             const basePhaseMs = e.getData('teleportEveryMs') || 3800;
+             e.setData('nextTeleportAt', this.time.now + basePhaseMs);
+             const targetX = Phaser.Math.Clamp(this.formationX + Phaser.Math.Between(-60, 60), this.playLeft + 24, this.playRight - 24);
+             const targetY = e.y + Phaser.Math.Between(40, 80);
+             if (targetY < this.scale.height - 120) {
+                this.tweens.add({
+                   targets: e,
+                   alpha: 0.2,
+                   scale: 0.3,
+                   duration: 150,
+                   yoyo: true,
+                   onYoyo: () => {
+                      e.setPosition(targetX, targetY);
+                      if (this.sparkle) this.sparkle.explode(12, e.x, e.y);
+                   }
+                });
+             }
+          }
         } else if (enemyType === 'shooter') {
           const stopY = e.getData('stopY') || 180;
           if (e.y < stopY) {
@@ -1476,6 +1560,9 @@ export default class PlayScene extends Phaser.Scene {
     if (key === 'multi') return this.multishotLevel < max;
     if (key === 'crit') return this.critLevel < max;
     if (key === 'frost') return this.frostLevel < max;
+    if (key === 'synergy_frost_nova') return this.synergyFrostNova < max;
+    if (key === 'synergy_plasma_beam') return this.synergyPlasmaBeam < max;
+    if (key === 'synergy_explosive_armor') return this.synergyExplosiveArmor < max;
     if (key === 'shield') return this.shieldCharges < max;
     if (key === 'endlessOverclock' || key === 'endlessBounty' || key === 'endlessCloseCall') return true;
     return true;
@@ -1489,6 +1576,9 @@ export default class PlayScene extends Phaser.Scene {
     if (key === 'multi') return this.multishotLevel;
     if (key === 'crit') return this.critLevel;
     if (key === 'frost') return this.frostLevel;
+    if (key === 'synergy_frost_nova') return this.synergyFrostNova;
+    if (key === 'synergy_plasma_beam') return this.synergyPlasmaBeam;
+    if (key === 'synergy_explosive_armor') return this.synergyExplosiveArmor;
     if (key === 'shield') return this.shieldCharges;
     if (key === 'endlessOverclock' || key === 'endlessBounty' || key === 'endlessCloseCall') return this.endlessPicks;
     return 0;
@@ -1518,9 +1608,17 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   getAvailableUpgradePool(banished = new Set(), excludeKeys = new Set()) {
-    const regular = UPGRADE_DEFS.filter(
+    let regular = UPGRADE_DEFS.filter(
       (u) => this.canOfferUpgrade(u.key) && !banished.has(u.key) && !excludeKeys.has(u.key),
     );
+    const availableSynergies = SYNERGY_DEFS.filter(s => {
+      if (banished.has(s.key) || excludeKeys.has(s.key) || !this.canOfferUpgrade(s.key)) return false;
+      for (const [reqKey, reqVal] of Object.entries(s.requires)) {
+         if (this.getUpgradeCurrentValue(reqKey) < reqVal) return false;
+      }
+      return true;
+    });
+    regular = regular.concat(availableSynergies);
     if (regular.length > 0) return regular;
     return ENDLESS_UPGRADE_DEFS.filter((u) => !banished.has(u.key) && !excludeKeys.has(u.key));
   }
@@ -1685,6 +1783,8 @@ export default class PlayScene extends Phaser.Scene {
     sprite.setData('shieldHp', config.shieldHp || 0);
     sprite.setData('splitOnDeath', Boolean(config.splitOnDeath));
     sprite.setData('shrapnelOnDeath', Boolean(config.shrapnelOnDeath));
+    sprite.setData('bomberExplosionOnDeath', Boolean(config.bomberExplosion));
+    sprite.setData('teleportEveryMs', config.teleportEveryMs || 0);
     sprite.setData('stopY', config.stopY || 0);
     sprite.setData('shootEveryMs', config.shootEveryMs || 0);
     sprite.setData('nextShootAt', this.time.now + Phaser.Math.Between(500, 1300));
@@ -1854,13 +1954,15 @@ export default class PlayScene extends Phaser.Scene {
     const speedY = this.frostLevel > 0 ? -500 : -470;
     b.setVelocity(vx, speedY);
     const hasPierce = this.pierceLevel > 0 || this.feverActive || this.powerupSystem?.hasPierceBuff?.();
-    const kindTint = kind === 'arc' ? 0xff9eff : kind === 'side' ? 0x9db8ff : 0x88ffff;
+    const isPlasma = kind === 'plasma_beam';
+    const kindTint = isPlasma ? 0xff44aa : kind === 'arc' ? 0xff9eff : kind === 'side' ? 0x9db8ff : 0x88ffff;
     const tint = this.frostLevel > 0 ? 0x9feaff : hasPierce ? 0xffd289 : kindTint;
     b.setTint(tint);
     const scaleY = Phaser.Math.Clamp(1 + this.damageLevel * 0.08 + (hasPierce ? 0.08 : 0), 1, 1.45);
-    b.setScale(1, scaleY);
+    b.setScale(isPlasma ? 3 : 1, isPlasma ? 4 : scaleY);
+    if (isPlasma) b.body.setSize(18, 80);
     const buffPierce = this.powerupSystem?.hasPierceBuff?.() || this.feverActive ? 99 : 0;
-    b.setData('pierceLeft', this.pierceLevel + buffPierce);
+    b.setData('pierceLeft', isPlasma ? 999 : this.pierceLevel + buffPierce);
     b.setData('bulletKind', kind);
     b.setData('trailAt', 0);
     b.setData('hitLockUntil', 0);
@@ -1972,6 +2074,141 @@ export default class PlayScene extends Phaser.Scene {
     });
   }
 
+  spawnBlackhole() {
+    const rx = Phaser.Math.Between(this.playLeft + 60, this.playRight - 60);
+    const ry = Phaser.Math.Between(120, this.scale.height - 280);
+    const bh = this.add.sprite(rx, ry, 'blackhole').setDepth(5).setScale(0).setAlpha(0);
+    this.blackholes.add(bh);
+    bh.setData('diesAt', this.time.now + 9000);
+    this.tweens.add({ targets: bh, scale: 1, alpha: 0.8, duration: 600, ease: 'Back.easeOut' });
+    this.showFloatingText('GRAVITY ANOMALY', rx, ry - 50, { color: '#aa33ff', size: 14, duration: 1500 });
+  }
+
+  updateBlackholes() {
+    const now = this.time.now;
+    this.blackholes.children.iterate((bh) => {
+      if (bh && bh.active) {
+        bh.rotation += 0.04;
+        if (now > bh.getData('diesAt') && !bh.getData('dying')) {
+          bh.setData('dying', true);
+          this.tweens.add({ targets: bh, scale: 0, alpha: 0, duration: 400, onComplete: () => bh.destroy() });
+        } else if (!bh.getData('dying')) {
+          // Pull player
+          const dx = bh.x - this.targetFormationX;
+          const dy = bh.y - this.playerBaseY;
+          const dist = Math.max(1, Math.hypot(dx, dy));
+          if (dist < 260) {
+            const force = (260 - dist) / 260; // 0 to 1
+            this.targetFormationX += (dx / dist) * force * 1.5;
+          }
+          // Pull bullets
+          this.bullets.children.iterate((b) => {
+             if (b && b.active) {
+                const bdx = bh.x - b.x;
+                const bdy = bh.y - b.y;
+                const bdist = Math.max(1, Math.hypot(bdx, bdy));
+                if (bdist < 260) {
+                   const bforce = (260 - bdist) / 260;
+                   b.x += (bdx / bdist) * bforce * 4.5;
+                   b.y += (bdy / bdist) * bforce * 2.5; 
+                   if (bdist < 20) {
+                      this.recycleBullet(b);
+                      this.emitMuzzleFlash(bh.x, bh.y);
+                   }
+                }
+             }
+             return true;
+          });
+        }
+      }
+      return true;
+    });
+  }
+
+  triggerActiveSkill() {
+     if (this.time.now < (this.activeSkillCooldownUntil || 0)) return;
+     this.activeSkillCooldownUntil = this.time.now + 12000; 
+     
+     if (this.shipClass === 'striker') {
+        this.feverActive = true;
+        this.feverEndsAt = this.time.now + 3000;
+        this.audio?.playFeverStart();
+        this.showFloatingText('STRIKER DASH', this.formationX, this.playerBaseY - 50, { color: '#00ffcc', size: 16, duration: 1000 });
+     } else if (this.shipClass === 'heavy') {
+        this.showFloatingText('HEAVY BOMB', this.formationX, this.playerBaseY - 50, { color: '#ff44aa', size: 16, duration: 1000 });
+        this.showQuickFlash(1, 400);
+        this.enemyBullets.children.iterate((b) => {
+           if (b && b.active) this.recycleEnemyBullet(b);
+           return true;
+        });
+        this.enemies.children.iterate((e) => {
+           if (e && e.active) {
+              const damage = 25 + this.damageLevel * 5;
+              const hp = e.getData('health') - damage;
+              e.setData('health', hp);
+              const txt = e.getData('healthText');
+              if (txt) txt.setText(String(Math.max(0, hp)));
+              e.setTint(0xffaaaa);
+              if (hp <= 0) this.killEnemy(e);
+           }
+           return true;
+        });
+     } else if (this.shipClass === 'ghost') {
+        this.showFloatingText('PHASE SHIFT', this.formationX, this.playerBaseY - 50, { color: '#aaccff', size: 16, duration: 1000 });
+        const oldX = this.formationX;
+        this.formationX = this.targetFormationX;
+        this.emitMuzzleFlash(oldX, this.playerBaseY);
+        this.emitMuzzleFlash(this.formationX, this.playerBaseY);
+        this.feverActive = true;
+        this.feverEndsAt = this.time.now + 1200; 
+     }
+  }
+
+  triggerFrostNova() {
+    if (this.gameOver || this.isChoosingUpgrade) return;
+    this.audio?.playFire();
+    this.showFloatingText('FROST NOVA', this.formationX, this.playerBaseY - 40, { color: '#66e6ff', size: 14, duration: 500 });
+    this.showQuickFlash(0.2, 100);
+    for(let i=0; i<16; i++) {
+        const angle = (i/16) * Math.PI*2;
+        const vx = Math.cos(angle) * 350;
+        const vy = Math.sin(angle) * 350;
+        const b = this.bullets.get(this.formationX, this.playerBaseY, 'bullet');
+        if (b) {
+           b.setActive(true).setVisible(true);
+           b.body.reset(this.formationX, this.playerBaseY);
+           b.body.setAllowGravity(false);
+           b.body.checkCollision.none = false;
+           b.setVelocity(vx, vy);
+           b.setTint(0x9feaff);
+           b.setScale(1.2, 1.2);
+           b.setData('pierceLeft', 2);
+           b.setData('bulletKind', 'frost_nova');
+           b.setData('hitLockUntil', 0);
+        }
+    }
+  }
+
+  triggerExplosiveArmor() {
+    this.showFloatingText('EXPLOSIVE ARMOR', this.formationX, this.playerBaseY - 30, { color: '#ffaacc', size: 18, duration: 600 });
+    this.showQuickFlash(0.4, 200);
+    this.enemies.children.iterate((e) => {
+       if (e && e.active) {
+           const dist = Phaser.Math.Distance.Between(this.formationX, this.playerBaseY, e.x, e.y);
+           if (dist < 320) {
+              const damage = 8 + this.damageLevel * 3;
+              const hp = e.getData('health') - damage;
+              e.setData('health', hp);
+              const txt = e.getData('healthText');
+              if (txt) txt.setText(String(Math.max(0, hp)));
+              e.setTint(0xffaaaa);
+              if (hp <= 0) this.killEnemy(e);
+           }
+       }
+       return true;
+    });
+  }
+
   fireFleet() {
     if (this.gameOver || this.isChoosingUpgrade) return;
     this.audio?.playFire();
@@ -1979,7 +2216,11 @@ export default class PlayScene extends Phaser.Scene {
     this.players.children.iterate((p) => {
       if (!p || !p.active) return true;
 
-      this.spawnBullet(p.x, p.y - 28, 0, 'core');
+      if (this.synergyPlasmaBeam > 0) {
+        this.spawnBullet(p.x, p.y - 40, 0, 'plasma_beam');
+      } else {
+        this.spawnBullet(p.x, p.y - 28, 0, 'core');
+      }
 
       if (this.multishotLevel >= 1) {
         this.spawnBullet(p.x - 10, p.y - 26, -120, 'side');
@@ -2017,7 +2258,7 @@ export default class PlayScene extends Phaser.Scene {
     const kind = bullet.getData('bulletKind') || 'core';
 
     const crit = Math.random() < this.getCritChance();
-    const kindMult = kind === 'arc' ? 0.72 : kind === 'side' ? 0.86 : 1;
+    const kindMult = kind === 'plasma_beam' ? 5 : kind === 'frost_nova' ? 2 : kind === 'arc' ? 0.72 : kind === 'side' ? 0.86 : 1;
     const damage = Math.max(1, Math.round(this.getBulletDamage() * kindMult * (crit ? 2 : 1)));
     this.audio?.playHit();
     if (crit) {
@@ -2141,6 +2382,12 @@ export default class PlayScene extends Phaser.Scene {
     if (enemy.getData('splitOnDeath') && !isBoss) {
       this.spawnFromWave({ type: 'splitterMini', x: x - 12, y: y - 4, vx: -130, spawnDelay: 0 });
       this.spawnFromWave({ type: 'splitterMini', x: x + 12, y: y - 4, vx: 130, spawnDelay: 0 });
+    }
+    if (enemy.getData('bomberExplosionOnDeath') && !isBoss) {
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        this.spawnEnemyShrapnel(x, y, Math.cos(angle), Math.sin(angle));
+      }
     }
     if (enemy.getData('shrapnelOnDeath') && !isBoss) {
       [
@@ -2450,8 +2697,14 @@ export default class PlayScene extends Phaser.Scene {
     } else if (key === 'endlessCloseCall') {
       this.endlessPicks += 1;
       this.endlessNearMissBonus = Math.min(30, this.endlessNearMissBonus + 3);
+    } else if (key === 'synergy_frost_nova') {
+      this.synergyFrostNova = 1;
+    } else if (key === 'synergy_plasma_beam') {
+      this.synergyPlasmaBeam = 1;
+    } else if (key === 'synergy_explosive_armor') {
+      this.synergyExplosiveArmor = 1;
     }
-    const picked = [...UPGRADE_DEFS, ...ENDLESS_UPGRADE_DEFS].find((u) => u.key === key);
+    const picked = [...UPGRADE_DEFS, ...ENDLESS_UPGRADE_DEFS, ...SYNERGY_DEFS].find((u) => u.key === key);
     this.selectedUpgrades.push(picked ? picked.label : key);
     if (picked) this.showFloatingText(`Upgrade Acquired: ${picked.label}`, this.scale.width * 0.5, 120, {
       color: '#88ffd5',
@@ -2489,6 +2742,7 @@ export default class PlayScene extends Phaser.Scene {
       this.tookDamageInLevel = true;
       this.audio?.playShieldAbsorb();
       this.killEnemy(enemy);
+      if (this.synergyExplosiveArmor > 0) this.triggerExplosiveArmor();
       this.updateHud();
       return;
     }
@@ -2509,6 +2763,7 @@ export default class PlayScene extends Phaser.Scene {
       if (isDeathOrb) {
         this.showFloatingText('ORB BLOCK', player.x, player.y - 22, { color: '#ff9aa8', size: 12, duration: 340 });
       }
+      if (this.synergyExplosiveArmor > 0) this.triggerExplosiveArmor();
       this.updateHud();
       return;
     }

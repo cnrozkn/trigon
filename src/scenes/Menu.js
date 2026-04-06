@@ -214,7 +214,63 @@ export default class Menu extends Phaser.Scene {
     if (this.audio) {
       this.audio.playUpgradeSelect();
     }
-    if (this.scene.isActive('Menu')) this.scene.start('PlayScene');
+    this.showClassSelection();
+  }
+
+  showClassSelection() {
+    this.hintText.setVisible(false);
+    this.buttonsContainer.setVisible(false);
+    this.tapStartZone.disableInteractive();
+    if (this.metaText) this.metaText.setVisible(false);
+    if (this.subText) this.subText.setVisible(false);
+
+    const { width, height } = this.scale;
+    const classContainer = this.add.container(width / 2, height * 0.52).setDepth(150);
+
+    const title = this.add.text(0, -160, 'Select Ship Class', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '28px',
+      color: '#fff',
+    }).setOrigin(0.5);
+
+    classContainer.add(title);
+
+    const classes = [
+      { id: 'striker', name: 'Striker', desc: 'Balanced Loadout', color: 0x00ffcc },
+      { id: 'heavy', name: 'Heavy', desc: '+1 Damage, +1 Shield, Slow Fire', color: 0xff44aa },
+      { id: 'ghost', name: 'Ghost', desc: 'Start with 2 Triangles', color: 0xaaccff },
+    ];
+
+    classes.forEach((c, i) => {
+      const y = -90 + i * 85;
+      
+      const btnBg = this.add.graphics();
+      btnBg.fillStyle(0x0a1022, 0.9);
+      btnBg.lineStyle(2, c.color, 0.8);
+      btnBg.fillRoundedRect(-140, y, 280, 70, 8);
+      btnBg.strokeRoundedRect(-140, y, 280, 70, 8);
+
+      const nameTxt = this.add.text(-120, y + 16, c.name, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '22px',
+        color: '#fff',
+        fontStyle: 'bold'
+      });
+
+      const descTxt = this.add.text(-120, y + 44, c.desc, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '13px',
+        color: '#aaa',
+      });
+
+      const zone = this.add.zone(0, y + 35, 280, 70).setInteractive({ useHandCursor: true });
+      zone.on('pointerdown', () => {
+         if (this.audio) this.audio.playUpgradeSelect();
+         this.scene.start('PlayScene', { shipClass: c.id });
+      });
+
+      classContainer.add([btnBg, nameTxt, descTxt, zone]);
+    });
   }
 
   update(_time, delta) {

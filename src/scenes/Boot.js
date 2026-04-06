@@ -137,6 +137,38 @@ export default class Boot extends Phaser.Scene {
       g.destroy();
     }
 
+    // Enemy: bomber (octagon or spikey circle)
+    {
+      const g = mk(44, 44);
+      g.fillStyle(0x360f0f, 0.95);
+      g.lineStyle(2.5, 0xff4422, 1);
+      drawRegularPolygon(g, 22, 22, 16, 8, 0x360f0f, 0xff4422, 2.5);
+      g.lineStyle(1.5, 0xff8866, 0.6);
+      g.strokeCircle(22, 22, 8);
+      g.generateTexture('enemy_bomber', 44, 44);
+      g.destroy();
+    }
+
+    // Enemy: teleporter (diamond with cross in it)
+    {
+      const g = mk(40, 40);
+      g.fillStyle(0x0f2a36, 0.95);
+      g.lineStyle(2, 0x66ccff, 1);
+      g.beginPath();
+      g.moveTo(20, 4);
+      g.lineTo(36, 20);
+      g.lineTo(20, 36);
+      g.lineTo(4, 20);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
+      g.lineStyle(1.5, 0x33ffff, 0.8);
+      g.strokeLineShape(new Phaser.Geom.Line(20, 6, 20, 34));
+      g.strokeLineShape(new Phaser.Geom.Line(6, 20, 34, 20));
+      g.generateTexture('enemy_teleporter', 40, 40);
+      g.destroy();
+    }
+
     // Enemy: shield bearer (pentagon + aura ring)
     {
       const g = mk(44, 44);
@@ -144,6 +176,25 @@ export default class Boot extends Phaser.Scene {
       g.lineStyle(1.6, 0x99f7ff, 0.9);
       g.strokeCircle(22, 22, 18);
       g.generateTexture('enemy_shield_bearer', 44, 44);
+      g.destroy();
+    }
+
+    // Blackhole (swirling dark circle)
+    {
+      const g = mk(80, 80);
+      g.fillStyle(0x0a0515, 0.95);
+      g.fillCircle(40, 40, 36);
+      g.lineStyle(2, 0x551188, 1);
+      g.strokeCircle(40, 40, 36);
+      g.lineStyle(2, 0x8822cc, 0.7);
+      g.beginPath();
+      g.arc(40, 40, 24, 0, Math.PI, false);
+      g.strokePath();
+      g.lineStyle(1.5, 0xff55ff, 0.5);
+      g.beginPath();
+      g.arc(40, 40, 12, Math.PI, Math.PI * 2, false);
+      g.strokePath();
+      g.generateTexture('blackhole', 80, 80);
       g.destroy();
     }
 

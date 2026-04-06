@@ -94,6 +94,28 @@ export function buildEnemyConfig(type, level, mutators = {}) {
     };
   }
 
+  if (type === 'teleporter') {
+    return {
+      ...base,
+      texture: 'enemy_teleporter',
+      hp: scaleHealth(1, level, 1.3 * hpMult),
+      baseVx: randBetween(-15, 15),
+      baseVy: randBetween(30, 45),
+      teleportEveryMs: 3800,
+    };
+  }
+
+  if (type === 'bomber') {
+    return {
+      ...base,
+      texture: 'enemy_bomber',
+      hp: scaleHealth(2, level, 1.4 * hpMult),
+      baseVx: randBetween(-10, 10),
+      baseVy: randBetween(28, 42),
+      bomberExplosion: true,
+    };
+  }
+
   if (type === 'shooter') {
     return {
       ...base,

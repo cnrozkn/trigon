@@ -3,11 +3,13 @@ const ENEMY_UNLOCK_LEVELS = {
   zigzag: 3,
   tank: 5,
   splitter: 7,
+  bomber: 9,
   shooter: 10,
   shieldBearer: 12,
+  teleporter: 14,
 };
 
-const BASE_TYPES = ['circle', 'zigzag', 'tank', 'splitter', 'shooter', 'shieldBearer'];
+const BASE_TYPES = ['circle', 'zigzag', 'tank', 'splitter', 'bomber', 'shooter', 'shieldBearer', 'teleporter'];
 
 function randomInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
