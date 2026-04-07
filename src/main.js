@@ -1,6 +1,22 @@
 import { createAudioFacade } from './audio/index.js';
 import { applyAppHeightCss, getViewportGameSize } from './platform/viewport.js';
 
+async function initNativePlugins() {
+  try {
+    const [{ StatusBar, Style }, { ScreenOrientation }] = await Promise.all([
+      import('@capacitor/status-bar'),
+      import('@capacitor/screen-orientation'),
+    ]);
+    await Promise.allSettled([
+      StatusBar.setStyle({ style: Style.Dark }),
+      StatusBar.hide(),
+      ScreenOrientation.lock({ orientation: 'portrait' }),
+    ]);
+  } catch {
+    // Web environment — no native plugins available, ignore.
+  }
+}
+
 function showBootError(error) {
   const root = document.getElementById('game-container') || document.body;
   const box = document.createElement('pre');
@@ -21,6 +37,7 @@ function showBootError(error) {
 
 async function startGame() {
   try {
+    await initNativePlugins();
     const Phaser = await import('phaser');
     const [{ default: Boot }, { default: Menu }, { default: PlayScene }, { default: PrestigeShop }, { default: AchievementsScene }, { default: UIScene }, { default: SettingsScene }, { default: StatsScene }] = await Promise.all([
       import('./scenes/Boot.js'),
@@ -37,12 +54,16 @@ async function startGame() {
     const initialSize = getViewportGameSize();
 
     const config = {
-      type: Phaser.AUTO,
+      type: Phaser.WEBGL,
       parent: 'game-container',
       width: initialSize.width,
       height: initialSize.height,
       backgroundColor: '#0a0a12',
       disableContextMenu: true,
+      antialias: false,
+      antialiasGL: false,
+      roundPixels: true,
+      powerPreference: 'high-performance',
       scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
