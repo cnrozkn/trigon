@@ -41,20 +41,26 @@ export const COSMETIC_COLORS = {
   gold: 0xffd700,
 };
 
+export function getSector(level) {
+  if (level <= 10) return 1;
+  if (level <= 20) return 2;
+  return 3;
+}
+
 export function playerTintForLevel(level, cosmeticId) {
   if (cosmeticId && cosmeticId !== 'default' && COSMETIC_COLORS[cosmeticId]) {
     return COSMETIC_COLORS[cosmeticId];
   }
-  if (level < 5) return 0xffffff;
-  if (level < 10) return 0x00ff88;
-  if (level < 15) return 0x00ffff;
+  const sector = getSector(level);
+  if (sector === 1) return 0xffffff;
+  if (sector === 2) return 0x00ffcc;
   return 0xff66cc;
 }
 
 export function enemyColorForLevel(level) {
-  if (level < 5) return 0xff66aa;
-  if (level < 10) return 0xff8877;
-  if (level < 15) return 0xffaa55;
+  const sector = getSector(level);
+  if (sector === 1) return 0xff66aa;
+  if (sector === 2) return 0xff8855;
   return 0xff4444;
 }
 
@@ -64,15 +70,15 @@ export function enemySpeedMultiplier(level) {
 
 export function regularEnemySpeedMultiplier(level) {
   if (level <= 2) return 1;
-  if (level <= 6) return 1 + (level - 2) * 0.052;
-  if (level <= 12) return 1.208 + (level - 6) * 0.043;
-  if (level <= 15) return 1.48 + (level - 12) * 0.05;
-  return Math.min(2.45, 1.63 + (level - 15) * 0.075);
+  const sector = getSector(level);
+  if (sector === 1) return 1 + (level - 2) * 0.052;
+  if (sector === 2) return 1.48 + (level - 10) * 0.045;
+  return Math.min(2.8, 1.93 + (level - 20) * 0.082);
 }
 
 export function backgroundToneForLevel(level) {
-  if (level < 5) return 0x0a1022;
-  if (level < 10) return 0x1a0d2a;
-  if (level < 15) return 0x2a1018;
-  return 0x2a1d08;
+  const sector = getSector(level);
+  if (sector === 1) return 0x0a1022;
+  if (sector === 2) return 0x1a0d2a;
+  return 0x2a1018;
 }

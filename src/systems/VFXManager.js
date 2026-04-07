@@ -24,7 +24,7 @@ export default class VFXManager {
       emitting: false,
     });
 
-    this.geoBurst = this.scene.add.particles(0, 0, 'particle_triangle', {
+    this.geoBurst = this.scene.add.particles(0, 0, 'vfx_particle_tri', {
       speed: { min: 70, max: 240 },
       angle: { min: 0, max: 360 },
       scale: { start: 0.7, end: 0 },

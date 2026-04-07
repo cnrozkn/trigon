@@ -17,6 +17,13 @@ const COSMETICS = [
   { id: 'gold', name: 'Solar Gold', type: 'color', value: 0xffd700, cost: 500 },
 ];
 
+const SHIPS = [
+  { id: 'striker', name: 'Striker', desc: 'Standard tactical unit.', cost: 0, color: 0x00ffcc },
+  { id: 'heavy', name: 'Titan', desc: '+1 DMG, +1 Shield, -15% SPD.', cost: 1500, color: 0xff44aa },
+  { id: 'ghost', name: 'Ghost', desc: 'Deployed with 2 units.', cost: 2000, color: 0xaaccff },
+  { id: 'glitch', name: 'Glitch', desc: 'Erratic bullets, fast fever.', cost: 2500, color: 0xffeeaa },
+];
+
 export default class PrestigeShop extends Phaser.Scene {
   constructor() {
     super({ key: 'PrestigeShop' });
@@ -46,13 +53,20 @@ export default class PrestigeShop extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(20);
 
     // Tabs
-    this.tabUpgradeBtn = this.add.text(width * 0.3, 130, 'UPGRADES', {
+    const tabY = 130;
+    this.tabUpgradeBtn = this.add.text(width * 0.22, tabY, 'UPGRADES', {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '18px',
       fontWeight: 'bold',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(20);
 
-    this.tabCosmeticBtn = this.add.text(width * 0.7, 130, 'COSMETICS', {
+    this.tabCosmeticBtn = this.add.text(width * 0.5, tabY, 'COLORS', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '18px',
+      fontWeight: 'bold',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(20);
+
+    this.tabShipsBtn = this.add.text(width * 0.78, tabY, 'SHIPS', {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '18px',
       fontWeight: 'bold',
@@ -66,6 +80,12 @@ export default class PrestigeShop extends Phaser.Scene {
 
     this.tabCosmeticBtn.on('pointerdown', () => {
       this.activeTab = 'cosmetics';
+      this.updateTabs();
+      this.drawList(width);
+    });
+
+    this.tabShipsBtn.on('pointerdown', () => {
+      this.activeTab = 'ships';
       this.updateTabs();
       this.drawList(width);
     });
@@ -119,6 +139,7 @@ export default class PrestigeShop extends Phaser.Scene {
     const inactiveColor = '#667788';
     this.tabUpgradeBtn.setColor(this.activeTab === 'upgrades' ? activeColor : inactiveColor);
     this.tabCosmeticBtn.setColor(this.activeTab === 'cosmetics' ? activeColor : inactiveColor);
+    this.tabShipsBtn.setColor(this.activeTab === 'ships' ? activeColor : inactiveColor);
   }
 
   drawList(width) {
@@ -144,7 +165,7 @@ export default class PrestigeShop extends Phaser.Scene {
         this.rowsContainer.add(row);
         y += 90;
       });
-    } else {
+    } else if (this.activeTab === 'cosmetics') {
       COSMETICS.forEach((item) => {
         const ownedCosmetics = this.profile.ownedCosmetics || ['default'];
         const isOwned = ownedCosmetics.includes(item.id);
@@ -167,6 +188,30 @@ export default class PrestigeShop extends Phaser.Scene {
             this.drawList(width);
           }
         }, isOwned, isActive, item.value);
+        this.rowsContainer.add(row);
+        y += 90;
+      });
+    } else if (this.activeTab === 'ships') {
+      SHIPS.forEach((ship) => {
+        const ownedShips = this.profile.ownedShips || ['striker'];
+        const isOwned = ownedShips.includes(ship.id);
+        const isActive = this.profile.selectedShip === ship.id;
+
+        const row = this.createRow(width, y, ship.name, ship.desc, isOwned ? 1 : 0, 1, ship.cost, false, () => {
+          if (isOwned) {
+            this.profile.selectedShip = ship.id;
+            saveGameProfile(this.profile);
+            this.drawList(width);
+          } else if (this.profile.coins >= ship.cost) {
+            this.profile.coins -= ship.cost;
+            if (!this.profile.ownedShips) this.profile.ownedShips = ['striker'];
+            this.profile.ownedShips.push(ship.id);
+            saveGameProfile(this.profile);
+            this.audio?.playLevelUp?.();
+            this.coinsText.setText(`Coins: ${this.profile.coins}`);
+            this.drawList(width);
+          }
+        }, isOwned, isActive, ship.id === 'striker' ? 0xffffff : ship.color);
         this.rowsContainer.add(row);
         y += 90;
       });
@@ -210,9 +255,9 @@ export default class PrestigeShop extends Phaser.Scene {
 
     const btnBg = this.add.graphics();
     let btnLabel = isMax ? 'MAX' : `${cost} C`;
-    if (this.activeTab === 'cosmetics') {
-      if (isActive) btnLabel = 'EQUIPPED';
-      else if (isOwned) btnLabel = 'EQUIP';
+    if (this.activeTab === 'cosmetics' || this.activeTab === 'ships') {
+      if (isActive) btnLabel = 'ACTIVE';
+      else if (isOwned) btnLabel = 'SELECT';
     }
 
     const canAfford = this.profile.coins >= cost || isOwned;

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { backgroundToneForLevel } from '../data/UpgradeDefinitions.js';
+import { backgroundToneForLevel, getSector } from '../data/UpgradeDefinitions.js';
 import { PLAYFIELD_MARGIN } from '../data/GameConstants.js';
 
 export default class BackgroundManager {
@@ -69,8 +69,31 @@ export default class BackgroundManager {
         ).color;
 
         if (this.bgTone) this.bgTone.setFillStyle(this.bgCurrentTone, feverActive ? 0.52 : 0.38);
-        if (this.bgGridFar) this.bgGridFar.tilePositionY -= (18 * delta) / 1000;
-        if (this.bgGridNear) this.bgGridNear.tilePositionY -= (11 * delta) / 1000;
+        
+        const sector = getSector(currentLevel);
+        const sectorColors = [0x64b4ff, 0xffaa44, 0x44ffaa];
+        const targetGridColor = sectorColors[sector - 1] || 0x64b4ff;
+        
+        if (this.bgGridFar) {
+          this.bgGridFar.tilePositionY -= (18 * delta) / 1000;
+          const cur = Phaser.Display.Color.ValueToColor(this.bgGridFar.tintTopLeft);
+          const tgt = Phaser.Display.Color.ValueToColor(targetGridColor);
+          const next = Phaser.Display.Color.Interpolate.ColorWithColor(cur, tgt, 100, 2).color;
+          this.bgGridFar.setTint(next);
+        }
+        if (this.bgGridNear) {
+          this.bgGridNear.tilePositionY -= (11 * delta) / 1000;
+          this.bgGridNear.setTint(this.bgGridFar.tintTopLeft);
+        }
+        
+        // Sector 2 (Magnetic) effect: subtle rapid flicker
+        if (sector === 2 && !feverActive) {
+          const glitch = Math.random() < 0.02;
+          if (glitch && this.bgGridFar) {
+            this.bgGridFar.setAlpha(0.24);
+            this.scene.time.delayedCall(50, () => this.bgGridFar?.setAlpha(0.12));
+          }
+        }
         
         if (this.bgGlow) {
             const pulse = feverActive

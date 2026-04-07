@@ -86,6 +86,18 @@ export default class CollisionManager {
       });
       return;
     }
+    if (this.scene.shipClass === 'glitch' && Math.random() < 0.22 && hp > 0) {
+      const targets = this.scene.enemies.getChildren().filter(e => e.active && e !== enemy);
+      if (targets.length > 0) {
+        const target = Phaser.Utils.Array.GetRandom(targets);
+        this.scene.physics.moveToObject(bullet, target, Math.abs(bullet.body.velocity.y) * 1.2);
+        bullet.setData('hitLockUntil', now + 120);
+        this.scene.showFloatingText('GLITCH', bullet.x, bullet.y, { color: '#ffeeaa', size: 10, duration: 250 });
+        this.scene.vfx?.emitImpact(bullet.x, bullet.y, 3);
+        return;
+      }
+    }
+
     this.scene.recycleBullet(bullet);
   }
 
@@ -107,6 +119,13 @@ export default class CollisionManager {
 
   onPlayerHitEnemy(player, enemy) {
     if (this.scene.gameOver || !enemy.active || this.scene.isChoosingUpgrade) return;
+
+    if (player.getData('isPhantom')) {
+      this.scene.vfx?.explodeSparkle(player.x, player.y, 8);
+      player.setActive(false).setVisible(false);
+      this.scene.killEnemy(enemy);
+      return;
+    }
 
     if (this.scene.shieldCharges > 0) {
       this.scene.shieldFlashIndex = this.scene.shieldCharges - 1;

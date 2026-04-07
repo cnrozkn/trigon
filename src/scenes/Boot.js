@@ -62,7 +62,7 @@ export default class Boot extends Phaser.Scene {
       g.strokeCircle(20, 20, 15);
       g.lineStyle(1, 0xffaaee, 0.6);
       g.strokeCircle(20, 20, 12);
-      g.generateTexture('enemy', 40, 40);
+      g.generateTexture('enemy_circle', 40, 40);
       g.destroy();
     }
 
@@ -211,6 +211,18 @@ export default class Boot extends Phaser.Scene {
       g.fillStyle(0xffffff, 1);
       g.fillCircle(3, 3, 2.5);
       g.generateTexture('particle_dot', 6, 6);
+      g.destroy();
+    }
+    {
+      const g = mk(12, 12);
+      g.fillStyle(0xffffff, 1);
+      g.beginPath();
+      g.moveTo(6, 0);
+      g.lineTo(12, 12);
+      g.lineTo(0, 12);
+      g.closePath();
+      g.fillPath();
+      g.generateTexture('vfx_particle_tri', 12, 12);
       g.destroy();
     }
 

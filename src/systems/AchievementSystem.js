@@ -46,6 +46,34 @@ export const ACHIEVEMENTS = [
     icon: '💎',
     check: (run) => (run?.perfectLevels || 0) >= 1,
   },
+  {
+    id: 'ship_collector',
+    name: 'Fleet Admiral',
+    desc: 'Own all 4 ship classes.',
+    icon: '🚀',
+    check: (_run, profile) => (profile.ownedShips?.length || 0) >= 4,
+  },
+  {
+    id: 'overdrive_user',
+    name: 'Overcharged',
+    desc: 'Trigger Overdrive in a run.',
+    icon: '⚡',
+    check: (run) => (run?.overdriveUses || 0) >= 1,
+  },
+  {
+    id: 'sector_2',
+    name: 'Magnetic Voyager',
+    desc: 'Reach Sector 2 (Level 11).',
+    icon: '🧲',
+    check: (run) => (run?.level || 0) >= 11,
+  },
+  {
+    id: 'sector_3',
+    name: 'Gravity Master',
+    desc: 'Reach Sector 3 (Level 21).',
+    icon: '🌌',
+    check: (run) => (run?.level || 0) >= 21,
+  },
 ];
 
 /**

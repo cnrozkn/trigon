@@ -226,51 +226,71 @@ export default class Menu extends Phaser.Scene {
 
     const { width, height } = this.scale;
     const classContainer = this.add.container(width / 2, height * 0.52).setDepth(150);
+    const profile = loadGameProfile();
+    const ownedShips = profile.ownedShips || ['striker'];
 
-    const title = this.add.text(0, -160, 'Select Ship Class', {
+    const title = this.add.text(0, -180, 'Select Ship Model', {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '28px',
       color: '#fff',
+      fontStyle: 'bold'
     }).setOrigin(0.5);
 
     classContainer.add(title);
 
     const classes = [
-      { id: 'striker', name: 'Striker', desc: 'Balanced Loadout', color: 0x00ffcc },
-      { id: 'heavy', name: 'Heavy', desc: '+1 Damage, +1 Shield, Slow Fire', color: 0xff44aa },
-      { id: 'ghost', name: 'Ghost', desc: 'Start with 2 Triangles', color: 0xaaccff },
+      { id: 'striker', name: 'Striker', desc: 'Standard tactical unit.', color: 0x00ffcc },
+      { id: 'heavy', name: 'Titan', desc: '+1 DMG, +1 Shield, Slow Fire', color: 0xff44aa },
+      { id: 'ghost', name: 'Ghost', desc: 'Starts with 2 units', color: 0xaaccff },
+      { id: 'glitch', name: 'Glitch', desc: 'Erratic bullets, fast fever', color: 0xffeeaa },
     ];
 
     classes.forEach((c, i) => {
-      const y = -90 + i * 85;
+      const y = -110 + i * 80;
+      const isOwned = ownedShips.includes(c.id);
       
       const btnBg = this.add.graphics();
-      btnBg.fillStyle(0x0a1022, 0.9);
-      btnBg.lineStyle(2, c.color, 0.8);
-      btnBg.fillRoundedRect(-140, y, 280, 70, 8);
-      btnBg.strokeRoundedRect(-140, y, 280, 70, 8);
+      btnBg.fillStyle(0x0a1022, isOwned ? 0.9 : 0.4);
+      btnBg.lineStyle(2, c.color, isOwned ? 0.8 : 0.2);
+      btnBg.fillRoundedRect(-140, y, 280, 68, 8);
+      btnBg.strokeRoundedRect(-140, y, 280, 68, 8);
 
-      const nameTxt = this.add.text(-120, y + 16, c.name, {
+      const nameTxt = this.add.text(-120, y + 14, c.name, {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '22px',
-        color: '#fff',
+        fontSize: '20px',
+        color: isOwned ? '#fff' : '#666',
         fontStyle: 'bold'
       });
 
-      const descTxt = this.add.text(-120, y + 44, c.desc, {
+      const descTxt = this.add.text(-120, y + 38, isOwned ? c.desc : 'LOCKED - Buy in Shop', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '13px',
-        color: '#aaa',
+        fontSize: '12px',
+        color: isOwned ? '#aaa' : '#444',
       });
 
-      const zone = this.add.zone(0, y + 35, 280, 70).setInteractive({ useHandCursor: true });
+      const zone = this.add.zone(0, y + 34, 280, 68).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => {
          if (this.audio) this.audio.playUpgradeSelect();
-         this.scene.start('PlayScene', { shipClass: c.id });
+         if (isOwned) {
+           this.scene.start('PlayScene', { shipClass: c.id });
+         } else {
+           this.scene.start('PrestigeShop');
+         }
       });
 
       classContainer.add([btnBg, nameTxt, descTxt, zone]);
     });
+
+    const backBtn = this.add.text(0, 220, '[ BACK TO MENU ]', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '16px',
+      color: '#446688',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    backBtn.on('pointerdown', () => {
+      this.scene.restart();
+    });
+    classContainer.add(backBtn);
   }
 
   update(_time, delta) {

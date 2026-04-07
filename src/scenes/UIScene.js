@@ -9,11 +9,18 @@ export default class UIScene extends Phaser.Scene {
     const { width, height } = this.scale;
     
     // UI Elements
-    this.hudSkill = this.add.text(16, 38, 'Skill: Ready (Double Tap)', {
+    // Overdrive Bar (Now at the top since Level bar was removed)
+    this.overdriveBarBg = this.add.graphics().setDepth(50);
+    this.overdriveBarFill = this.add.graphics().setDepth(51);
+    this.overdriveBarText = this.add.text(0, 0, 'OD', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '14px',
-        color: '#aaccff',
-    }).setDepth(200).setScrollFactor(0);
+        fontSize: '11px',
+        fontWeight: 'bold',
+        color: '#00ffcc',
+    }).setOrigin(0.5).setDepth(52).setVisible(false);
+
+    this.powerupBarBg = this.add.graphics().setDepth(50);
+    this.powerupBarFill = this.add.graphics().setDepth(51);
 
     this.hudScore = this.add.text(16, 18, 'Score: 0', {
         fontFamily: 'system-ui, sans-serif',
@@ -64,10 +71,7 @@ export default class UIScene extends Phaser.Scene {
     });
 
     // Progress Bars
-    this.progressBarBg = this.add.graphics().setDepth(50);
-    this.progressBarFill = this.add.graphics().setDepth(51);
-    this.powerupBarBg = this.add.graphics().setDepth(50);
-    this.powerupBarFill = this.add.graphics().setDepth(51);
+    // Handled above
     this.powerupBarText = this.add.text(0, 0, '', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '11px',
@@ -77,132 +81,150 @@ export default class UIScene extends Phaser.Scene {
 
     // Layout
     this.layoutTop();
-    this.drawBars(0, 0, '');
+    this.drawPowerupBar(0, '');
 
-    // Listen to Main Scene Events
+    // Listen to Global Game Events
     const playScene = this.scene.get('PlayScene');
-    if (playScene) {
-        playScene.events.on('update_score', (score) => {
-            this.hudScore.setText(`Score: ${Math.floor(score)}`);
-            this.layoutTop();
-        });
+    
+    this.game.events.on('update_score', (score) => {
+        this.hudScore.setText(`Score: ${Math.floor(score)}`);
+        this.layoutTop();
+    });
 
-        playScene.events.on('update_level', (level) => {
-            this.hudLevel.setText(`LV.${level}`);
-            this.layoutTop();
-        });
+    this.game.events.on('update_level', (level) => {
+        this.hudLevel.setText(`LV.${level}`);
+        this.layoutTop();
+    });
 
-        playScene.events.on('update_wave', (current, total) => {
-            if (total > 0) {
-              this.hudWave.setText(`WAVE ${current}/${total}`);
-            } else {
-              this.hudWave.setText('');
-            }
-            this.layoutTop();
-        });
+    this.game.events.on('update_wave', (current, total) => {
+        if (total > 0) {
+          this.hudWave.setText(`WAVE ${current}/${total}`);
+        } else {
+          this.hudWave.setText('');
+        }
+        this.layoutTop();
+    });
 
-        playScene.events.on('update_combo', (streak) => {
-            if (streak > 1) {
-                this.hudCombo.setText(`x${streak}`);
-                this.hudCombo.setAlpha(1);
-                this.hudCombo.setScale(1.3);
-                this.tweens.killTweensOf(this.hudCombo);
-                this.tweens.add({
-                    targets: this.hudCombo,
-                    scale: 1,
-                    alpha: { start: 1, to: 0.8 },
-                    duration: 300,
-                    ease: 'Back.out',
-                });
-            } else {
-                this.tweens.killTweensOf(this.hudCombo);
-                this.tweens.add({
-                    targets: this.hudCombo,
-                    alpha: 0,
-                    duration: 200,
-                });
-            }
-        });
-
-        playScene.events.on('fever_start', () => {
-            this.hudFever.setAlpha(1).setScale(1.5);
+    this.game.events.on('update_combo', (streak) => {
+        if (streak > 1) {
+            this.hudCombo.setText(`x${streak}`);
+            this.hudCombo.setAlpha(1);
+            this.hudCombo.setScale(1.3);
+            this.tweens.killTweensOf(this.hudCombo);
             this.tweens.add({
-                targets: this.hudFever,
+                targets: this.hudCombo,
                 scale: 1,
-                duration: 400,
+                alpha: { start: 1, to: 0.8 },
+                duration: 300,
                 ease: 'Back.out',
             });
-        });
-        
-        playScene.events.on('fever_end', () => {
+        } else {
+            this.tweens.killTweensOf(this.hudCombo);
             this.tweens.add({
-                targets: this.hudFever,
+                targets: this.hudCombo,
                 alpha: 0,
-                duration: 500,
+                duration: 200,
             });
-        });
+        }
+    });
 
-        playScene.events.on('update_skill', (left) => {
-            if (left <= 0) {
-               this.hudSkill.setText('Skill: Ready (Double Tap)').setColor('#00ffcc');
-            } else {
-               this.hudSkill.setText(`Skill: ${left.toFixed(1)}s`).setColor('#ffaaaa');
-            }
+    this.game.events.on('fever_start', () => {
+        this.hudFever.setAlpha(1).setScale(1.5);
+        this.tweens.add({
+            targets: this.hudFever,
+            scale: 1,
+            duration: 400,
+            ease: 'Back.out',
         });
+    });
+    
+    this.game.events.on('fever_end', () => {
+        this.tweens.add({
+            targets: this.hudFever,
+            alpha: 0,
+            duration: 500,
+        });
+    });
 
-        playScene.events.on('update_bars', (levelProgress, powerupProgress, powerupLabel) => {
-            this.drawBars(levelProgress, powerupProgress, powerupLabel);
-        });
+    this.game.events.on('update_overdrive', (charge, active) => {
+        this.drawOverdrive(charge, active);
+    });
 
-        playScene.events.on('toggle_ui_visibility', (visible) => {
-            this.pauseButton.setVisible(visible);
-            this.hudSkill.setVisible(visible);
-            this.hudScore.setVisible(visible);
-            this.hudLevel.setVisible(visible);
-            this.hudWave.setVisible(visible);
-        });
+    this.game.events.on('update_bars', (levelProgress, powerupProgress, powerupLabel) => {
+        this.drawPowerupBar(powerupProgress, powerupLabel);
+    });
 
-        playScene.events.on('show_pause', (audioSettings) => {
-            this.renderPauseOverlay(audioSettings);
-        });
+    this.game.events.on('toggle_ui_visibility', (visible) => {
+        this.pauseButton.setVisible(visible);
+        this.progressBarBg.setVisible(visible);
+        this.progressBarFill.setVisible(visible);
+        this.hudScore.setVisible(visible);
+        this.hudLevel.setVisible(visible);
+        this.hudWave.setVisible(visible);
+        this.overdriveBarBg.setVisible(visible);
+        this.overdriveBarFill.setVisible(visible);
+        this.overdriveBarText.setVisible(visible);
+        this.overdriveBarText.setVisible(visible);
+    });
 
-        playScene.events.on('hide_pause', () => {
-             if (this.pauseOverlay) this.pauseOverlay.setVisible(false);
-        });
+    this.game.events.on('show_pause', (audioSettings) => {
+        this.renderPauseOverlay(audioSettings);
+    });
 
-        playScene.events.on('show_game_over', (result) => {
-            this.renderGameOverOverlay(result);
-        });
+    this.game.events.on('hide_pause', () => {
+         if (this.pauseOverlay) this.pauseOverlay.setVisible(false);
+    });
 
-        playScene.events.on('show_onboarding', (stepData) => {
-            this.renderOnboardingStep(stepData);
-        });
+    this.game.events.on('show_game_over', (result) => {
+        this.renderGameOverOverlay(result);
+    });
 
-        playScene.events.on('hide_onboarding', () => {
-            if (this.onboardingOverlay) {
-                this.onboardingOverlay.destroy(true);
-                this.onboardingOverlay = null;
-            }
-        });
+    this.game.events.on('show_onboarding', (stepData) => {
+        this.renderOnboardingStep(stepData);
+    });
 
-        // Clean up events on destroy
-        this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
-            playScene.events.off('update_score');
-            playScene.events.off('update_level');
-            playScene.events.off('update_wave');
-            playScene.events.off('update_combo');
-            playScene.events.off('fever_start');
-            playScene.events.off('fever_end');
-            playScene.events.off('update_skill');
-            playScene.events.off('update_bars');
-            playScene.events.off('toggle_ui_visibility');
-            playScene.events.off('show_pause');
-            playScene.events.off('hide_pause');
-            playScene.events.off('show_game_over');
-            playScene.events.off('show_onboarding');
-            playScene.events.off('hide_onboarding');
-        });
-    }
+    this.game.events.on('show_upgrade_selection', (data) => {
+        this.renderUpgradeSelectionModal(data);
+    });
+
+    this.game.events.on('update_upgrade_selection', (data) => {
+        this.renderUpgradeSelectionModal(data);
+    });
+
+    this.game.events.on('close_upgrade_selection', () => {
+        if (this.upgradeOverlay) {
+            this.upgradeOverlay.destroy(true);
+            this.upgradeOverlay = null;
+        }
+    });
+
+    this.game.events.on('hide_onboarding', () => {
+        if (this.onboardingOverlay) {
+            this.onboardingOverlay.destroy(true);
+            this.onboardingOverlay = null;
+        }
+    });
+
+    // Clean up events on destroy
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.game.events.off('update_score');
+        this.game.events.off('update_level');
+        this.game.events.off('update_wave');
+        this.game.events.off('update_combo');
+        this.game.events.off('fever_start');
+        this.game.events.off('fever_end');
+        this.game.events.off('update_overdrive');
+        this.game.events.off('update_bars');
+        this.game.events.off('toggle_ui_visibility');
+        this.game.events.off('show_pause');
+        this.game.events.off('hide_pause');
+        this.game.events.off('show_game_over');
+        this.game.events.off('show_onboarding');
+        this.game.events.off('hide_onboarding');
+        this.game.events.off('show_upgrade_selection');
+        this.game.events.off('update_upgrade_selection');
+        this.game.events.off('close_upgrade_selection');
+    });
 
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -212,11 +234,16 @@ export default class UIScene extends Phaser.Scene {
 
   handleResize(gameSize) {
     const width = gameSize.width;
-    this.hudCombo.setPosition(width * 0.5, 88);
-    this.hudFever.setPosition(width * 0.5, 128);
+    const barW = width * 0.5;
+    const barX = (width - barW) * 0.5;
+    const barY = 38; // Level Bar
+    const odBarY = 50; // OD Bar closer to Level
+
+    this.hudCombo.setPosition(width * 0.5, 98);
+    this.hudFever.setPosition(width * 0.5, 138);
     this.pauseButton.setPosition(width - 24, 24);
     this.layoutTop();
-    this.drawBars(0, 0, ''); // Refresh bars position
+    this.drawPowerupBar(0, ''); // Refresh bars position
   }
 
   layoutTop() {
@@ -228,38 +255,54 @@ export default class UIScene extends Phaser.Scene {
     this.hudWave.setPosition(nx, 18);
   }
 
-  drawBars(levelProgress, powerupProgress, powerupLabel) {
-    const { width, height } = this.scale;
+  drawPowerupBar(powerupProgress, powerupLabel) {
+    const { width } = this.scale;
     const barW = width * 0.5;
     const barH = 6;
     const barX = (width - barW) * 0.5;
-    const barY = 12;
+    const barY = 50; // Powerup Bar (Moves it nicely below OD bar)
 
-    // Level Progress Bar
-    this.progressBarBg.clear();
-    this.progressBarBg.fillStyle(0x223344, 0.5);
-    this.progressBarBg.fillRoundedRect(barX, barY, barW, barH, 3);
-    
-    this.progressBarFill.clear();
-    if (levelProgress > 0) {
-      this.progressBarFill.fillStyle(0x00ccff, 0.9);
-      this.progressBarFill.fillRoundedRect(barX, barY, barW * levelProgress, barH, 3);
-    }
-
-    // Powerup Bar
-    const pBarY = barY + 12;
     this.powerupBarBg.clear();
     this.powerupBarFill.clear();
     this.powerupBarText.setText('');
 
     if (powerupProgress > 0) {
       this.powerupBarBg.fillStyle(0x223344, 0.4);
-      this.powerupBarBg.fillRoundedRect(barX, pBarY, barW, barH - 2, 2);
+      this.powerupBarBg.fillRoundedRect(barX, barY, barW, barH - 2, 2);
       
       this.powerupBarFill.fillStyle(0xffaa22, 0.8);
-      this.powerupBarFill.fillRoundedRect(barX, pBarY, barW * powerupProgress, barH - 2, 2);
+      this.powerupBarFill.fillRoundedRect(barX, barY, barW * powerupProgress, barH - 2, 2);
       
-      this.powerupBarText.setPosition(width * 0.5, pBarY + 12).setText(powerupLabel);
+      this.powerupBarText.setPosition(width * 0.5, barY + 12).setText(powerupLabel);
+    }
+  }
+
+  drawOverdrive(charge, active) {
+    const { width } = this.scale;
+    const barW = width * 0.44;
+    const barH = 7;
+    const barX = (width - barW) * 0.5;
+    const barY = 38; // OD Bar now at the top y position
+
+    this.overdriveBarBg.clear();
+    this.overdriveBarFill.clear();
+
+    if (charge > 0 || active) {
+        this.overdriveBarText.setVisible(true).setPosition(barX - 22, barY + 3.5);
+        this.overdriveBarBg.fillStyle(0x223344, 0.4);
+        this.overdriveBarBg.fillRoundedRect(barX, barY, barW, barH, 3);
+        
+        const color = active ? 0xff44aa : (charge >= 1 ? 0x00ffcc : 0x4a6a9a);
+        this.overdriveBarFill.fillStyle(color, 0.9);
+        this.overdriveBarFill.fillRoundedRect(barX, barY, barW * (active ? 1.0 : charge), barH, 3);
+        
+        if (charge >= 1 && !active) {
+          const glowAlpha = 0.3 + Math.sin(this.time.now * 0.01) * 0.2;
+          this.overdriveBarBg.lineStyle(2, 0xffffff, glowAlpha);
+          this.overdriveBarBg.strokeRoundedRect(barX - 1, barY - 1, barW + 2, barH + 2, 3);
+        }
+    } else {
+        this.overdriveBarText.setVisible(false);
     }
   }
 
@@ -336,7 +379,7 @@ export default class UIScene extends Phaser.Scene {
 
       bg.on('pointerdown', (pointer) => {
         update(pointer.worldX);
-        playScene.events.emit('save_audio_settings');
+        this.game.events.emit('save_audio_settings');
       });
       
       knob.setInteractive({ useHandCursor: true, draggable: true });
@@ -345,7 +388,7 @@ export default class UIScene extends Phaser.Scene {
       });
       
       knob.on('dragend', () => {
-        playScene.events.emit('save_audio_settings');
+        this.game.events.emit('save_audio_settings');
       });
 
       return [title, bg, fill, knob, pct];
@@ -356,18 +399,39 @@ export default class UIScene extends Phaser.Scene {
     });
 
     const resume = makeBtn('Resume', height * 0.56, () => playScene.togglePauseByUser());
-    const restart = makeBtn('Restart', height * 0.635, () => playScene.scene.restart());
-    const menu = makeBtn('Menu', height * 0.71, () => playScene.scene.start('Menu'));
+    const restart = makeBtn('Restart', height * 0.635, () => {
+        playScene.scene.restart();
+        this.scene.restart();
+    });
+    const menu = makeBtn('Menu', height * 0.71, () => {
+        playScene.scene.stop();
+        this.scene.start('Menu');
+    });
 
     this.pauseOverlay.add([panel, title, ...sfxSliderItems, resume, restart, menu]);
   }
 
   renderGameOverOverlay(result) {
+    console.log('[UIScene] Rendering Game Over Overlay:', result);
+    
+    // Cleanup any other potentially blocking overlays
+    if (this.upgradeOverlay) {
+        this.upgradeOverlay.destroy(true);
+        this.upgradeOverlay = null;
+    }
+    if (this.onboardingOverlay) {
+        this.onboardingOverlay.destroy(true);
+        this.onboardingOverlay = null;
+    }
+    if (this.pauseOverlay) {
+        this.pauseOverlay.setVisible(false);
+    }
+
     if (!this.gameOverOverlay) {
         this.gameOverOverlay = this.add.container(0, 0).setDepth(250);
     }
     this.gameOverOverlay.removeAll(true);
-    this.gameOverOverlay.setVisible(true);
+    this.gameOverOverlay.setVisible(true).setAlpha(1);
 
     const { width, height } = this.scale;
     const playScene = this.scene.get('PlayScene');
@@ -427,7 +491,10 @@ export default class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => playScene.scene.restart());
+      .on('pointerdown', () => {
+          playScene.scene.restart();
+          this.scene.restart();
+      });
 
     const menuBtn = this.add
       .text(width * 0.5, panelY + panelHeight - 45, 'Back to Menu', {
@@ -437,12 +504,16 @@ export default class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => playScene.scene.start('Menu'));
+      .on('pointerdown', () => {
+          playScene.scene.stop();
+          this.scene.start('Menu');
+      });
 
     this.gameOverOverlay.add([panel, title, stats, restartBtn, menuBtn]);
   }
 
   renderOnboardingStep(stepData) {
+    console.log('[UIScene] Rendering Onboarding Step:', stepData.index);
     if (this.onboardingOverlay) this.onboardingOverlay.destroy(true);
     const { width, height } = this.scale;
     const playScene = this.scene.get('PlayScene');
@@ -494,6 +565,130 @@ export default class UIScene extends Phaser.Scene {
 
     container.add([panel, title, body, indicator, ...demoItems]);
     this.onboardingOverlay = container;
+  }
+
+  renderUpgradeSelectionModal(data) {
+    console.log('[UIScene] Rendering Upgrade Selection Modal. Rerolls:', data.rerolls);
+    if (this.upgradeOverlay) {
+      this.upgradeOverlay.destroy(true);
+      this.upgradeOverlay = null;
+    }
+
+    const { width, height } = this.scale;
+    const playScene = this.scene.get('PlayScene');
+    
+    const container = this.add.container(0, 0).setDepth(220).setVisible(true).setAlpha(1);
+    const bg = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0x000000, 0.6).setInteractive();
+    
+    const title = this.add
+      .text(width * 0.5, height * 0.18, 'Draft Upgrade', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '32px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+
+    const rerollLabel = data.rerolls > 0 ? `Reroll (${data.rerolls})` : 'Reroll (0)';
+    const rerollBtn = this.add
+      .text(width * 0.5, height * 0.26, rerollLabel, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: data.rerolls > 0 ? '#88ffcc' : '#556677',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: data.rerolls > 0 });
+
+    if (data.rerolls > 0) {
+      rerollBtn.on('pointerdown', () => this.game.events.emit('reroll_draft'));
+    }
+
+    const hint = this.add
+      .text(width * 0.5, height * 0.31, 'Banish removes one card from this draft pool.', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        color: '#8899aa',
+      })
+      .setOrigin(0.5);
+
+    const startX = width * 0.2;
+    const gap = width * 0.3;
+    const rarityGlow = { Common: 0x33cc88, Rare: 0x55aaff, Epic: 0xaa66ff };
+
+    data.choices.forEach((choice, i) => {
+      const x = startX + i * gap;
+      const y = height * 0.52;
+      const cardContainer = this.add.container(x, y + 40).setAlpha(0);
+      const glow = this.add.rectangle(0, 0, 126, 172, rarityGlow[choice.rarity] || 0xffffff, 0.15);
+      const card = this.add
+        .rectangle(0, 0, 116, 158, 0x0f1325, 0.95)
+        .setStrokeStyle(2, choice.color || 0x445566, 1)
+        .setInteractive({ useHandCursor: true });
+
+      const name = this.add
+        .text(0, -42, choice.label, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '14px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+          align: 'center',
+          wordWrap: { width: 100 },
+        })
+        .setOrigin(0.5);
+
+      const stackLine = this.add
+        .text(0, -14, choice.stackLabel, {
+          fontFamily: 'ui-monospace, monospace',
+          fontSize: '11px',
+          color: '#ffeeaa',
+        })
+        .setOrigin(0.5);
+
+      const desc = this.add
+        .text(0, 24, choice.desc, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '11px',
+          color: '#bdeeff',
+          align: 'center',
+          wordWrap: { width: 100 },
+        })
+        .setOrigin(0.5);
+
+      const banishBtn = this.add
+        .text(0, 68, 'Banish', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '12px',
+          color: '#ff88aa',
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this.game.events.emit('banish_slot', i));
+
+      card.on('pointerdown', () => {
+          this.tweens.add({
+              targets: cardContainer,
+              scale: 1.1,
+              alpha: 0,
+              duration: 200,
+              onComplete: () => this.game.events.emit('select_upgrade', choice.key)
+          });
+      });
+
+      cardContainer.add([glow, card, name, stackLine, desc, banishBtn]);
+      this.tweens.add({
+        targets: cardContainer,
+        y, alpha: 1,
+        duration: 300,
+        ease: 'Back.out',
+        delay: i * 80,
+      });
+      container.add(cardContainer);
+    });
+
+    container.add([bg, title, rerollBtn, hint]);
+    container.sendToBack(bg);
+    this.upgradeOverlay = container;
   }
 
   formatDuration(ms) {

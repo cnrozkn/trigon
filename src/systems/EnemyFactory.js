@@ -45,7 +45,7 @@ export function buildEnemyConfig(type, level, mutators = {}) {
 
   const base = {
     type,
-    texture: 'enemy',
+    texture: 'enemy_circle',
     tint: null,
     hp: scaleHealth(1, level, hpMult),
     body: 'circle',
