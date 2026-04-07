@@ -433,9 +433,18 @@ export default class PlayScene extends Phaser.Scene {
           const t = this.time.now * 0.001;
           const amp = e.getData('zigzagAmp') || 100;
           const freq = e.getData('zigzagFreq') || 4.4;
+          if (e.body && (e.body.blocked.left || e.body.blocked.right)) {
+            e.setData('zigzagSeed', (e.getData('zigzagSeed') || 0) + Math.PI);
+            if (this.vfx) this.vfx.explodeSparkle(e.x, e.y, 6);
+          }
           e.setVelocityX(Math.sin((e.getData('zigzagSeed') || 0) + t * freq) * amp * slowMult);
           e.setVelocityY(vy);
         } else if (enemyType === 'teleporter') {
+          if (e.body && (e.body.blocked.left || e.body.blocked.right)) {
+            const bvx = e.getData('baseVx') || 0;
+            e.setData('baseVx', -bvx);
+            if (this.vfx) this.vfx.explodeSparkle(e.x, e.y, 6);
+          }
           e.setVelocityX((e.getData('baseVx') || 0) * slowMult);
           e.setVelocityY(vy);
           const nextTeleAt = e.getData('nextTeleportAt') || 0;
@@ -474,6 +483,11 @@ export default class PlayScene extends Phaser.Scene {
             }
           }
         } else {
+          if (e.body && (e.body.blocked.left || e.body.blocked.right)) {
+            const bvx = e.getData('baseVx') || 0;
+            e.setData('baseVx', -bvx);
+            if (this.vfx) this.vfx.explodeSparkle(e.x, e.y, 6);
+          }
           e.setVelocityX((e.getData('baseVx') || 0) * slowMult);
           e.setVelocityY(vy);
         }
