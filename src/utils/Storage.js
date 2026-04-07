@@ -29,12 +29,9 @@ const DEFAULT_GAME_PROFILE = {
     deathParticles: 'default',
   },
   achievements: [],
+  claimedAchievementRewards: [],
   ownedShips: ['striker'],
   selectedShip: 'striker',
-  dailyChallenges: {
-    lastPlayedDate: '',
-    bestScore: 0,
-  },
 };
 
 function clamp01(value, fallback) {
@@ -111,9 +108,9 @@ export function loadGameProfile() {
     upgrades: { ...DEFAULT_GAME_PROFILE.upgrades, ...(parsed.upgrades || {}) },
     cosmetics: { ...DEFAULT_GAME_PROFILE.cosmetics, ...(parsed.cosmetics || {}) },
     achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
+    claimedAchievementRewards: Array.isArray(parsed.claimedAchievementRewards) ? parsed.claimedAchievementRewards : [],
     ownedShips: Array.isArray(parsed.ownedShips) ? parsed.ownedShips : ['striker'],
     selectedShip: parsed.selectedShip || 'striker',
-    dailyChallenges: { ...DEFAULT_GAME_PROFILE.dailyChallenges, ...(parsed.dailyChallenges || {}) },
   };
 }
 
@@ -128,9 +125,9 @@ export function saveGameProfile(profile) {
     upgrades: { ...DEFAULT_GAME_PROFILE.upgrades, ...(profile.upgrades || {}) },
     cosmetics: { ...DEFAULT_GAME_PROFILE.cosmetics, ...(profile.cosmetics || {}) },
     achievements: Array.isArray(profile.achievements) ? profile.achievements : [],
+    claimedAchievementRewards: Array.isArray(profile.claimedAchievementRewards) ? profile.claimedAchievementRewards : [],
     ownedShips: Array.isArray(profile.ownedShips) ? profile.ownedShips : ['striker'],
     selectedShip: profile.selectedShip || 'striker',
-    dailyChallenges: { ...DEFAULT_GAME_PROFILE.dailyChallenges, ...(profile.dailyChallenges || {}) },
   };
   safeWriteJson(GAME_PROFILE_KEY, safe);
 }

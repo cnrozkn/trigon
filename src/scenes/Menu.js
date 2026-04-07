@@ -1,6 +1,5 @@
 import * as Phaser from 'phaser';
 import { loadGameProfile } from '../utils/Storage.js';
-import { getTodayChallenge, isChallengeAttempted } from '../systems/ChallengeSystem.js';
 
 export default class Menu extends Phaser.Scene {
   constructor() {
@@ -120,15 +119,10 @@ export default class Menu extends Phaser.Scene {
 
     this.buttonsContainer = this.add.container(width / 2, height * 0.72).setDepth(60);
     
-    // Check daily challenge status
-    const challengeDone = isChallengeAttempted(profile);
-    const today = getTodayChallenge();
-
-    this.createMenuButton(0, -66, 'Shop & Upgrades', () => this.scene.start('PrestigeShop'));
-    this.createMenuButton(0, -14, 'Achievements', () => this.scene.start('AchievementsScene'));
-    this.createMenuButton(0, 38, challengeDone ? 'Challenge (Done)' : `Daily: ${today.name}`, () => {
-      this.scene.start('PlayScene', { challenge: today });
-    }, challengeDone ? 0x667788 : 0xaa66ff);
+    this.createMenuButton(0, -90, 'Shop & Upgrades', () => this.scene.launch('PrestigeShop'));
+    this.createMenuButton(0, -38, 'Achievements', () => this.scene.launch('AchievementsScene'));
+    this.createMenuButton(0, 14, 'Career Stats', () => this.scene.launch('StatsScene'));
+    this.createMenuButton(0, 66, 'Settings', () => this.scene.launch('SettingsScene', { fromScene: 'Menu' }), 0x446688);
 
     this.tweens.add({
       targets: this.hintText,
@@ -155,6 +149,19 @@ export default class Menu extends Phaser.Scene {
       if (this.bgGlow) this.bgGlow.destroy();
       if (this.tapStartZone) this.tapStartZone.destroy();
     });
+  }
+
+  setUIVisible(visible) {
+    const alpha = visible ? 1 : 0;
+    if (this.titleText) this.titleText.setAlpha(alpha);
+    if (this.subText) this.subText.setAlpha(alpha);
+    if (this.hintText) this.hintText.setAlpha(alpha);
+    if (this.metaText) this.metaText.setAlpha(alpha);
+    if (this.buttonsContainer) this.buttonsContainer.setAlpha(alpha);
+    if (this.tapStartZone) {
+      if (visible) this.tapStartZone.setInteractive();
+      else this.tapStartZone.disableInteractive();
+    }
   }
 
   ensureAudioUnlocked() {
@@ -225,6 +232,12 @@ export default class Menu extends Phaser.Scene {
     if (this.subText) this.subText.setVisible(false);
 
     const { width, height } = this.scale;
+
+    // Solid background so menu decorations don't bleed through
+    const overlay = this.add.graphics().setDepth(149);
+    overlay.fillGradientStyle(0x07090f, 0x07090f, 0x0d1320, 0x0d1320, 1);
+    overlay.fillRect(0, 0, width, height);
+
     const classContainer = this.add.container(width / 2, height * 0.52).setDepth(150);
     const profile = loadGameProfile();
     const ownedShips = profile.ownedShips || ['striker'];

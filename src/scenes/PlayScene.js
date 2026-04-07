@@ -284,7 +284,9 @@ export default class PlayScene extends Phaser.Scene {
 
     this.updateHud();
 
-    if (this.profile.totalGamesPlayed === 0) this.startOnboarding();
+    if (this.profile.totalGamesPlayed === 0) {
+      this.time.delayedCall(200, () => this.startOnboarding());
+    }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.game.events.off('select_upgrade');
@@ -964,7 +966,7 @@ export default class PlayScene extends Phaser.Scene {
     this.isPausedByUser = !this.isPausedByUser;
     if (this.isPausedByUser) {
       this.setPlayflowPaused(true);
-      this.game.events.emit('show_pause', this.audio?.getSettings?.() || { sfxVolume: 0.85 });
+      this.game.events.emit('show_pause');
     } else {
       this.game.events.emit('hide_pause');
       this.setPlayflowPaused(false);

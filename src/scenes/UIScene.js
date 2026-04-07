@@ -155,16 +155,15 @@ export default class UIScene extends Phaser.Scene {
     });
 
     this.game.events.on('toggle_ui_visibility', (visible) => {
-        this.pauseButton.setVisible(visible);
-        this.progressBarBg.setVisible(visible);
-        this.progressBarFill.setVisible(visible);
-        this.hudScore.setVisible(visible);
-        this.hudLevel.setVisible(visible);
-        this.hudWave.setVisible(visible);
-        this.overdriveBarBg.setVisible(visible);
-        this.overdriveBarFill.setVisible(visible);
-        this.overdriveBarText.setVisible(visible);
-        this.overdriveBarText.setVisible(visible);
+        this.pauseButton?.setVisible(visible);
+        this.progressBarBg?.setVisible(visible);
+        this.progressBarFill?.setVisible(visible);
+        this.hudScore?.setVisible(visible);
+        this.hudLevel?.setVisible(visible);
+        this.hudWave?.setVisible(visible);
+        this.overdriveBarBg?.setVisible(visible);
+        this.overdriveBarFill?.setVisible(visible);
+        this.overdriveBarText?.setVisible(visible);
     });
 
     this.game.events.on('show_pause', (audioSettings) => {
@@ -306,7 +305,7 @@ export default class UIScene extends Phaser.Scene {
     }
   }
 
-  renderPauseOverlay(audioSettings) {
+  renderPauseOverlay() {
     if (!this.pauseOverlay) {
         this.pauseOverlay = this.add.container(0, 0).setDepth(230);
     }
@@ -316,99 +315,64 @@ export default class UIScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const playScene = this.scene.get('PlayScene');
 
+    const btnLabels = ['Resume', 'Settings', 'Restart', 'Menu'];
+    const btnCount = btnLabels.length;
+    const btnH = Math.min(52, height * 0.08);
+    const btnW = Math.min(220, width * 0.6);
+    const btnSpacing = btnH + 10;
+    const titleH = Math.min(54, height * 0.1);
+    const blockH = titleH + btnCount * btnSpacing;
+    const startY = (height - blockH) * 0.5;
+
+    const panelPad = 24;
+    const panelW = btnW + panelPad * 2;
+    const panelH = blockH + panelPad * 2;
+    const panelX = (width - panelW) * 0.5;
+    const panelY = startY - panelPad;
+
     const panel = this.add
-      .rectangle(width * 0.5, height * 0.53, width * 0.84, height * 0.62, 0x0c1220, 0.93)
+      .rectangle(panelX + panelW * 0.5, panelY + panelH * 0.5, panelW, panelH, 0x0c1220, 0.95)
       .setStrokeStyle(2, 0x5d84b6, 0.9);
 
     const title = this.add
-      .text(width * 0.5, height * 0.32, 'PAUSED', {
+      .text(width * 0.5, startY + titleH * 0.5, 'PAUSED', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '40px',
+        fontSize: Math.min(36, width * 0.09) + 'px',
         fontStyle: 'bold',
         color: '#ffffff',
       })
       .setOrigin(0.5);
 
-    const makeBtn = (label, y, handler) =>
-      this.add
+    const handlers = [
+      () => playScene.togglePauseByUser(),
+      () => this.scene.launch('SettingsScene', { fromScene: 'UIScene', isPauseContext: true }),
+      () => { playScene.scene.restart(); this.scene.restart(); },
+      () => { playScene.scene.stop(); this.scene.start('Menu'); },
+    ];
+
+    const btnObjs = btnLabels.map((label, i) => {
+      const y = startY + titleH + i * btnSpacing + btnH * 0.5;
+      const btnBg = this.add.graphics();
+      btnBg.fillStyle(0x1a2a40, 0.9);
+      btnBg.fillRoundedRect(width * 0.5 - btnW * 0.5, y - btnH * 0.5, btnW, btnH, 8);
+
+      const btn = this.add
         .text(width * 0.5, y, label, {
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '22px',
+          fontSize: Math.min(20, width * 0.05) + 'px',
           fontStyle: 'bold',
           color: '#d9ebff',
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', handler);
+        .on('pointerdown', handlers[i])
+        .on('pointerover', () => { btnBg.clear(); btnBg.fillStyle(0x2a4060, 1); btnBg.fillRoundedRect(width * 0.5 - btnW * 0.5, y - btnH * 0.5, btnW, btnH, 8); })
+        .on('pointerout',  () => { btnBg.clear(); btnBg.fillStyle(0x1a2a40, 0.9); btnBg.fillRoundedRect(width * 0.5 - btnW * 0.5, y - btnH * 0.5, btnW, btnH, 8); });
 
-    const createVolumeSlider = (label, y, value, onChange) => {
-      const title = this.add
-        .text(width * 0.5 - 120, y, label, {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '15px',
-          fontStyle: 'bold',
-          color: '#c9daef',
-        })
-        .setOrigin(0, 0.5);
-
-      const barW = 170;
-      const barH = 12;
-      const barX = width * 0.5 - 8;
-      const bg = this.add
-        .rectangle(barX, y, barW, barH, 0x1a2a40, 0.95)
-        .setOrigin(0, 0.5)
-        .setStrokeStyle(1, 0x6a89ad, 0.8)
-        .setInteractive({ useHandCursor: true });
-      const fill = this.add.rectangle(barX, y, barW * Phaser.Math.Clamp(value, 0, 1), barH, 0x76c3ff, 1).setOrigin(0, 0.5);
-      const knob = this.add.circle(barX + barW * Phaser.Math.Clamp(value, 0, 1), y, 8, 0xe9f4ff, 1).setStrokeStyle(2, 0x5fa8e0, 1);
-      const pct = this.add
-        .text(barX + barW + 14, y, `${Math.round(Phaser.Math.Clamp(value, 0, 1) * 100)}`, {
-          fontFamily: 'ui-monospace, monospace',
-          fontSize: '13px',
-          color: '#d6e8ff',
-        })
-        .setOrigin(0, 0.5);
-
-      const update = (worldX) => {
-        const ratio = Phaser.Math.Clamp((worldX - barX) / barW, 0, 1);
-        fill.width = Math.max(2, barW * ratio);
-        knob.x = barX + barW * ratio;
-        pct.setText(`${Math.round(ratio * 100)}`);
-        onChange(ratio);
-      };
-
-      bg.on('pointerdown', (pointer) => {
-        update(pointer.worldX);
-        this.game.events.emit('save_audio_settings');
-      });
-      
-      knob.setInteractive({ useHandCursor: true, draggable: true });
-      knob.on('drag', (pointer) => {
-        update(pointer.worldX);
-      });
-      
-      knob.on('dragend', () => {
-        this.game.events.emit('save_audio_settings');
-      });
-
-      return [title, bg, fill, knob, pct];
-    };
-
-    const sfxSliderItems = createVolumeSlider('SFX', height * 0.455, audioSettings.sfxVolume ?? 0.85, (v) => {
-      playScene.audio?.setSfxVolume(v);
+      return [btnBg, btn];
     });
 
-    const resume = makeBtn('Resume', height * 0.56, () => playScene.togglePauseByUser());
-    const restart = makeBtn('Restart', height * 0.635, () => {
-        playScene.scene.restart();
-        this.scene.restart();
-    });
-    const menu = makeBtn('Menu', height * 0.71, () => {
-        playScene.scene.stop();
-        this.scene.start('Menu');
-    });
-
-    this.pauseOverlay.add([panel, title, ...sfxSliderItems, resume, restart, menu]);
+    this.pauseOverlay.add([panel, title, ...btnObjs.flat()]);
   }
 
   renderGameOverOverlay(result) {
@@ -438,56 +402,67 @@ export default class UIScene extends Phaser.Scene {
     
     const run = result.run;
     const profile = result.profile;
-    const upgrades = run.selectedUpgrades.length > 0 ? run.selectedUpgrades.join(', ') : '-';
-    const panelWidth = Math.min(width * 0.9, 560);
-    const panelHeight = Math.min(height * 0.78, 620);
+
+
+    // Responsive sizing
+    const safeTop = 20;
+    const safeBot = 20;
+    const panelWidth = Math.min(width * 0.92, 480);
     const panelX = (width - panelWidth) * 0.5;
-    const panelY = Math.max(24, height * 0.1);
+    const panelY = safeTop;
+    const panelHeight = height - safeTop - safeBot;
+
+    const titleFontSize = Math.min(36, width * 0.09);
+    const statsFontSize = Math.min(15, width * 0.038);
+    const btnFontSize = Math.min(22, width * 0.056);
 
     const panel = this.add.graphics();
-    panel.fillStyle(0x0b1020, 0.9);
+    panel.fillStyle(0x0b1020, 0.92);
     panel.lineStyle(2, 0x5c8fcf, 0.72);
-    panel.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, 20);
-    panel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 20);
+    panel.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, 16);
+    panel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 16);
 
     const title = this.add
-      .text(width * 0.5, panelY + 74, 'GAME OVER', {
+      .text(width * 0.5, panelY + titleFontSize + 14, 'GAME OVER', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '46px',
+        fontSize: titleFontSize + 'px',
         fontStyle: 'bold',
         color: '#ff6677',
       })
       .setOrigin(0.5);
 
     const lines = [
+      result.isNewBest ? '★ NEW BEST ★' : `Best: ${profile.highScore}`,
       `Score: ${run.score}`,
       `Level: ${run.level}`,
-      result.isNewBest ? 'NEW BEST!' : `Best: ${profile.highScore}`,
       `Kills: ${run.runKills}`,
       `Time: ${this.formatDuration(run.runDurationMs)}`,
-      `Max Combo: x${run.maxCombo}`,
-      `Upgrades: ${upgrades}`,
-      `Earned: ${run.coinsCollected} coins`,
+      `Max Combo: ×${run.maxCombo}`,
+      `Coins Earned: ${run.coinsCollected}`,
     ];
 
+    const statsY = panelY + titleFontSize * 2 + 28;
     const stats = this.add
-      .text(width * 0.5, panelY + panelHeight * 0.5, lines.join('\n'), {
+      .text(width * 0.5, statsY, lines.join('\n'), {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '18px',
-        lineSpacing: 10,
+        fontSize: statsFontSize + 'px',
+        lineSpacing: Math.min(10, height * 0.012),
         color: '#e0edff',
         align: 'center',
+        wordWrap: { width: panelWidth - 40 },
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5, 0);
+
+    const btnAreaY = panelY + panelHeight - Math.min(110, height * 0.2);
 
     const restartBtn = this.add
-      .text(width * 0.5, panelY + panelHeight - 110, 'TRY AGAIN', {
+      .text(width * 0.5, btnAreaY, 'TRY AGAIN', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '28px',
+        fontSize: btnFontSize + 'px',
         fontStyle: 'bold',
         color: '#ffffff',
-        backgroundColor: '#3a5f8f',
-        padding: { x: 32, y: 12 },
+        backgroundColor: '#2a4f7f',
+        padding: { x: Math.min(28, width * 0.07), y: 11 },
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
@@ -497,9 +472,9 @@ export default class UIScene extends Phaser.Scene {
       });
 
     const menuBtn = this.add
-      .text(width * 0.5, panelY + panelHeight - 45, 'Back to Menu', {
+      .text(width * 0.5, btnAreaY + Math.min(58, height * 0.09), '← Menu', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '18px',
+        fontSize: Math.min(16, width * 0.04) + 'px',
         color: '#88aadd',
       })
       .setOrigin(0.5)
@@ -558,7 +533,7 @@ export default class UIScene extends Phaser.Scene {
       this.tweens.add({ targets: bullet, y: height * 0.53, alpha: 0.3, duration: 450, repeat: -1 });
       demoItems.push(bullet);
     } else {
-      const enemy = this.add.image(width * 0.5, height * 0.6, 'enemy').setScale(1.2).setTint(0xff6688);
+      const enemy = this.add.image(width * 0.5, height * 0.6, 'enemy_circle').setScale(1.2).setTint(0xff6688);
       this.tweens.add({ targets: enemy, y: height * 0.65, duration: 700, yoyo: true, repeat: -1 });
       demoItems.push(enemy);
     }
