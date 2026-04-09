@@ -175,8 +175,8 @@ export default class Menu extends Phaser.Scene {
     const bg = this.add.graphics();
     bg.fillStyle(0x0f182b, 0.85);
     bg.lineStyle(2, strokeColor, 0.8);
-    bg.fillRoundedRect(-110, -20, 220, 40, 10);
-    bg.strokeRoundedRect(-110, -20, 220, 40, 10);
+    bg.fillRoundedRect(-110, -24, 220, 48, 10);
+    bg.strokeRoundedRect(-110, -24, 220, 48, 10);
 
     const txt = this.add.text(0, 0, text, {
       fontFamily: 'system-ui, sans-serif',
@@ -186,7 +186,7 @@ export default class Menu extends Phaser.Scene {
 
     btn.add([bg, txt]);
 
-    const zone = this.add.zone(0, 0, 220, 40).setInteractive({ useHandCursor: true });
+    const zone = this.add.zone(0, 0, 220, 48).setInteractive({ useHandCursor: true });
     btn.add(zone);
 
     zone.on('pointerdown', () => {
@@ -194,21 +194,21 @@ export default class Menu extends Phaser.Scene {
       if (this.audio) this.audio.playUpgradeSelect();
       onClick();
     });
-    
+
     zone.on('pointerover', () => {
       bg.clear();
       bg.fillStyle(0x192a4a, 0.95);
       bg.lineStyle(2, strokeColor, 1);
-      bg.fillRoundedRect(-110, -20, 220, 40, 10);
-      bg.strokeRoundedRect(-110, -20, 220, 40, 10);
+      bg.fillRoundedRect(-110, -24, 220, 48, 10);
+      bg.strokeRoundedRect(-110, -24, 220, 48, 10);
     });
 
     zone.on('pointerout', () => {
       bg.clear();
       bg.fillStyle(0x0f182b, 0.85);
       bg.lineStyle(2, strokeColor, 0.8);
-      bg.fillRoundedRect(-110, -20, 220, 40, 10);
-      bg.strokeRoundedRect(-110, -20, 220, 40, 10);
+      bg.fillRoundedRect(-110, -24, 220, 48, 10);
+      bg.strokeRoundedRect(-110, -24, 220, 48, 10);
     });
 
     this.buttonsContainer.add(btn);

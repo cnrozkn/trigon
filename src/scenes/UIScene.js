@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { getSafeAreaInsets } from '../platform/viewport.js';
 
 export default class UIScene extends Phaser.Scene {
   constructor() {
@@ -7,7 +8,8 @@ export default class UIScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
-    
+    this._safeTop = getSafeAreaInsets().top;
+
     // UI Elements
     // Overdrive Bar (Now at the top since Level bar was removed)
     this.overdriveBarBg = this.add.graphics().setDepth(50);
@@ -22,41 +24,42 @@ export default class UIScene extends Phaser.Scene {
     this.powerupBarBg = this.add.graphics().setDepth(50);
     this.powerupBarFill = this.add.graphics().setDepth(51);
 
-    this.hudScore = this.add.text(16, 18, 'Score: 0', {
+    const st = this._safeTop;
+    this.hudScore = this.add.text(16, st + 18, 'Score: 0', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '18px',
         color: '#aaffff',
     }).setOrigin(0, 0.5).setDepth(100);
 
-    this.hudLevel = this.add.text(16, 18, 'LV.1', {
+    this.hudLevel = this.add.text(16, st + 18, 'LV.1', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '15px',
         fontStyle: 'bold',
         color: '#ccddff',
     }).setOrigin(0, 0.5).setDepth(100);
 
-    this.hudWave = this.add.text(16, 18, 'WAVE 0/0', {
+    this.hudWave = this.add.text(16, st + 18, 'WAVE 0/0', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '13px',
         fontStyle: 'bold',
         color: '#9fd6ff',
     }).setOrigin(0, 0.5).setDepth(100);
 
-    this.hudCombo = this.add.text(width * 0.5, 88, 'x0', {
+    this.hudCombo = this.add.text(width * 0.5, st + 88, 'x0', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '34px',
         fontStyle: 'bold',
         color: '#ffe080',
     }).setOrigin(0.5).setDepth(110).setAlpha(0);
 
-    this.hudFever = this.add.text(width * 0.5, 128, 'FEVER!', {
+    this.hudFever = this.add.text(width * 0.5, st + 128, 'FEVER!', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '40px',
         fontStyle: 'bold',
         color: '#ff78ff',
     }).setOrigin(0.5).setDepth(112).setAlpha(0);
 
-    this.pauseButton = this.add.text(width - 24, 24, '||', {
+    this.pauseButton = this.add.text(width - 24, st + 14, '||', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '22px',
         fontStyle: 'bold',
@@ -233,25 +236,23 @@ export default class UIScene extends Phaser.Scene {
 
   handleResize(gameSize) {
     const width = gameSize.width;
-    const barW = width * 0.5;
-    const barX = (width - barW) * 0.5;
-    const barY = 38; // Level Bar
-    const odBarY = 50; // OD Bar closer to Level
+    const st = this._safeTop || 0;
 
-    this.hudCombo.setPosition(width * 0.5, 98);
-    this.hudFever.setPosition(width * 0.5, 138);
-    this.pauseButton.setPosition(width - 24, 24);
+    this.hudCombo.setPosition(width * 0.5, st + 98);
+    this.hudFever.setPosition(width * 0.5, st + 138);
+    this.pauseButton.setPosition(width - 24, st + 14);
     this.layoutTop();
-    this.drawPowerupBar(0, ''); // Refresh bars position
+    this.drawPowerupBar(0, '');
   }
 
   layoutTop() {
+    const st = this._safeTop || 0;
     let nx = 16;
-    this.hudScore.setPosition(nx, 18);
+    this.hudScore.setPosition(nx, st + 18);
     nx += this.hudScore.width + 12;
-    this.hudLevel.setPosition(nx, 18);
+    this.hudLevel.setPosition(nx, st + 18);
     nx += this.hudLevel.width + 12;
-    this.hudWave.setPosition(nx, 18);
+    this.hudWave.setPosition(nx, st + 18);
   }
 
   drawPowerupBar(powerupProgress, powerupLabel) {
@@ -259,7 +260,7 @@ export default class UIScene extends Phaser.Scene {
     const barW = width * 0.5;
     const barH = 6;
     const barX = (width - barW) * 0.5;
-    const barY = 50; // Powerup Bar (Moves it nicely below OD bar)
+    const barY = (this._safeTop || 0) + 50;
 
     this.powerupBarBg.clear();
     this.powerupBarFill.clear();
@@ -281,7 +282,7 @@ export default class UIScene extends Phaser.Scene {
     const barW = width * 0.44;
     const barH = 7;
     const barX = (width - barW) * 0.5;
-    const barY = 38; // OD Bar now at the top y position
+    const barY = (this._safeTop || 0) + 38;
 
     this.overdriveBarBg.clear();
     this.overdriveBarFill.clear();
@@ -405,7 +406,7 @@ export default class UIScene extends Phaser.Scene {
 
 
     // Responsive sizing
-    const safeTop = 20;
+    const safeTop = Math.max(this._safeTop || 0, 20);
     const safeBot = 20;
     const panelWidth = Math.min(width * 0.92, 480);
     const panelX = (width - panelWidth) * 0.5;

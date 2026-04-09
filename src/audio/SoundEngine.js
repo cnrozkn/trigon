@@ -63,6 +63,13 @@ export default class SoundEngine {
     if (!ctx) return false;
     if (ctx.state === 'running') return true;
     try {
+      // iOS WKWebView requires playing an actual (silent) buffer to unlock AudioContext,
+      // not just calling resume(). This is the standard iOS audio unlock technique.
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
       void ctx.resume();
       return true;
     } catch (_err) {

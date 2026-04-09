@@ -60,9 +60,9 @@ async function startGame() {
       height: initialSize.height,
       backgroundColor: '#0a0a12',
       disableContextMenu: true,
-      antialias: false,
-      antialiasGL: false,
-      roundPixels: true,
+      antialias: true,
+      antialiasGL: true,
+      roundPixels: false,
       powerPreference: 'high-performance',
       scale: {
         mode: Phaser.Scale.RESIZE,

@@ -93,24 +93,49 @@ export default class SettingsScene extends Phaser.Scene {
       }
     );
 
-    // Back button
-    const backY = panelY + panelH - 44;
-    const backBtn = this.add.text(width * 0.5, backY, '← BACK', {
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: '20px',
-      fontStyle: 'bold',
-      color: '#00ffcc',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-    backBtn.on('pointerover', () => backBtn.setShadow(0,0,10,'#00ffcc',true,true));
-    backBtn.on('pointerout', () => backBtn.setShadow(0,0,0));
-    backBtn.on('pointerdown', () => this.goBack());
+    // Back button — use a proper container with large hit zone (iOS 44pt minimum)
+    const backY = panelY + panelH - 36;
+    this._createBackButton(width * 0.5, backY);
 
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       if (menu) menu.setUIVisible(true);
       this.scale.off('resize', this.handleResize, this);
     });
+  }
+
+  _createBackButton(x, y) {
+    const btnW = 180;
+    const btnH = 48;
+    const strokeColor = 0x00ffcc;
+
+    const btn = this.add.container(x, y).setDepth(100);
+    const bg = this.add.graphics();
+
+    const draw = (hover) => {
+      bg.clear();
+      bg.fillStyle(0x0f182b, hover ? 0.95 : 0.85);
+      bg.lineStyle(2, strokeColor, hover ? 1 : 0.8);
+      bg.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10);
+      bg.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 10);
+    };
+    draw(false);
+
+    const txt = this.add.text(0, 0, '← BACK', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '20px',
+      fontStyle: 'bold',
+      color: '#00ffcc',
+    }).setOrigin(0.5);
+
+    btn.add([bg, txt]);
+
+    const zone = this.add.zone(0, 0, btnW, btnH).setInteractive({ useHandCursor: true });
+    btn.add(zone);
+
+    zone.on('pointerover', () => draw(true));
+    zone.on('pointerout', () => draw(false));
+    zone.on('pointerdown', () => this.goBack());
   }
 
   createSlider(label, y, initialValue, onChange) {

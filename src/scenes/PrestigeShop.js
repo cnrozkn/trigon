@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { loadGameProfile, saveGameProfile } from '../utils/Storage.js';
+import { getSafeAreaInsets } from '../platform/viewport.js';
 
 const UPGRADES = [
   { id: 'baseDamage',    name: 'Base Damage',      desc: '+1 starting damage per level',       maxLvl: 5, baseCost: 500,  costMult: 1.5 },
@@ -66,7 +67,7 @@ export default class PrestigeShop extends Phaser.Scene {
     this.add.zone(width/2, height/2, width, height).setInteractive();
 
     // Header Area
-    const safeTop = Math.max(30, height * 0.05);
+    const safeTop = Math.max(getSafeAreaInsets().top + 16, height * 0.05);
     const headerH = 70;
     
     this.add.text(width / 2, safeTop + 24, 'PRESTIGE SHOP', {
@@ -117,9 +118,9 @@ export default class PrestigeShop extends Phaser.Scene {
     });
     this._refreshTabs(tabStartX, itemW, tabY, tabH);
 
-    // Back button
-    const safeBot = Math.max(30, height * 0.05);
-    const backH = 44;
+    // Back button — account for home indicator / safe area
+    const safeBot = Math.max(getSafeAreaInsets().bottom + 16, height * 0.06);
+    const backH = 48;
     const backY = height - safeBot - backH;
     
     this.createMenuButton(width / 2, backY + backH / 2, '← BACK', () => {
@@ -160,7 +161,7 @@ export default class PrestigeShop extends Phaser.Scene {
     const btn = this.add.container(x, y).setDepth(60);
     const bg = this.add.graphics();
     const btnW = 180;
-    const btnH = 40;
+    const btnH = 48; // iOS minimum touch target 44pt
     
     const draw = (hover) => {
       bg.clear();

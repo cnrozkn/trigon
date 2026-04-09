@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { loadGameProfile } from '../utils/Storage.js';
 import { ACHIEVEMENTS } from '../systems/AchievementSystem.js';
+import { getSafeAreaInsets } from '../platform/viewport.js';
 
 export default class StatsScene extends Phaser.Scene {
   constructor() {
@@ -22,8 +23,9 @@ export default class StatsScene extends Phaser.Scene {
   _build() {
     this.children.removeAll(true);
     const { width, height } = this.scale;
-    const safeTop = Math.max(30, height * 0.08);
-    const safeBot = Math.max(30, height * 0.05);
+    const insets = getSafeAreaInsets();
+    const safeTop = Math.max(insets.top + 16, height * 0.08);
+    const safeBot = Math.max(insets.bottom + 16, height * 0.06);
 
     // Dark Overlay Background
     const bg = this.add.graphics();
@@ -42,7 +44,7 @@ export default class StatsScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(20).setStroke('#ff00aa', 2).setShadow(0, 0, 15, '#00ffff', true, true);
 
     // Back button
-    const backH = 44;
+    const backH = 48;
     const backY = height - safeBot - backH;
     
     this.createMenuButton(width / 2, backY + backH / 2, '← BACK', () => {
@@ -62,8 +64,8 @@ export default class StatsScene extends Phaser.Scene {
     const btn = this.add.container(x, y).setDepth(60);
     const bg = this.add.graphics();
     const btnW = 180;
-    const btnH = 40;
-    
+    const btnH = 48;
+
     const draw = (hover) => {
       bg.clear();
       bg.fillStyle(0x0f182b, hover ? 0.95 : 0.85);
