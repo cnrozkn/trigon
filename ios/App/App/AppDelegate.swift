@@ -38,6 +38,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        do {
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback,
+                mode: .default,
+                options: [.mixWithOthers, .duckOthers]
+            )
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            // Non-fatal — Web Audio will still work if the system allows it.
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

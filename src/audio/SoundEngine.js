@@ -70,7 +70,9 @@ export default class SoundEngine {
       src.buffer = buf;
       src.connect(ctx.destination);
       src.start(0);
-      void ctx.resume();
+      if (ctx.state !== 'running') {
+        ctx.resume().catch(() => {});
+      }
       return true;
     } catch (_err) {
       return false;

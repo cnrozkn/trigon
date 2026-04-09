@@ -89,12 +89,14 @@ async function startGame() {
     game.registry.set('audio', audio);
 
     // Keep nudging AudioContext awake on every gesture until running (covers tab focus / odd mobile states).
-    const domUnlockOpts = { capture: true, passive: true };
+    const domUnlockOpts = { capture: true, passive: false };
     const domAudioNudge = () => {
       audio.unlockSyncFromUserGesture();
     };
     document.addEventListener('touchstart', domAudioNudge, domUnlockOpts);
+    document.addEventListener('touchend', domAudioNudge, domUnlockOpts);
     document.addEventListener('pointerdown', domAudioNudge, domUnlockOpts);
+    document.addEventListener('click', domAudioNudge, domUnlockOpts);
     const syncGameViewport = () => {
       applyAppHeightCss();
       const { width, height } = getViewportGameSize();
@@ -125,6 +127,7 @@ async function startGame() {
         game.loop.sleep();
       } else {
         game.loop.wake(true);
+        audio.resume();
         queueViewportSync();
       }
     });
@@ -132,7 +135,9 @@ async function startGame() {
       'beforeunload',
       () => {
         document.removeEventListener('touchstart', domAudioNudge, domUnlockOpts);
+        document.removeEventListener('touchend', domAudioNudge, domUnlockOpts);
         document.removeEventListener('pointerdown', domAudioNudge, domUnlockOpts);
+        document.removeEventListener('click', domAudioNudge, domUnlockOpts);
         if (window.visualViewport) {
           window.visualViewport.removeEventListener('resize', queueViewportSync);
           window.visualViewport.removeEventListener('scroll', queueViewportSync);

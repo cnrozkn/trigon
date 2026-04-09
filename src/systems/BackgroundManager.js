@@ -47,6 +47,7 @@ export default class BackgroundManager {
 
     drawPlayfieldFrame() {
         if (this.playfieldFrame) this.playfieldFrame.destroy();
+        /*
         const { width, height } = this.scene.scale;
         const playLeft = PLAYFIELD_MARGIN;
         const playRight = width - PLAYFIELD_MARGIN;
@@ -57,6 +58,7 @@ export default class BackgroundManager {
         g.lineStyle(1, 0x223355, 0.35);
         g.strokeRect(playLeft + 3, 8, playRight - playLeft - 6, height - 16);
         this.playfieldFrame = g;
+        */
     }
 
     update(delta, currentLevel, feverActive, shieldCharges, gameOver, isChoosingUpgrade) {
