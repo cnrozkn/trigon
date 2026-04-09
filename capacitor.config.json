@@ -1,6 +1,6 @@
 {
-  "appId": "com.trigon.game",
-  "appName": "Trigon",
+  "appId": "com.trigonx.game",
+  "appName": "Trigonx",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

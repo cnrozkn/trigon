@@ -1,4 +1,4 @@
-# TRIGON — Product Requirements Document (PRD)
+# TRIGONX — Product Requirements Document (PRD)
 
 > **Son Güncelleme:** 7 Nisan 2026  
 > **Versiyon:** 1.2.0  
@@ -8,7 +8,7 @@
 
 ## 1. Proje Özeti
 
-**Trigon**, hiçbir harici görsel asset kullanılmadan tamamen geometrik şekillerle oluşturulmuş bir **neon bullet-hell / auto-shooter** hypercasual oyundur.
+**Trigonx**, hiçbir harici görsel asset kullanılmadan tamamen geometrik şekillerle oluşturulmuş bir **neon bullet-hell / auto-shooter** hypercasual oyundur.
 
 - **Tür:** Hypercasual Auto-Shooter / Bullet Hell
 - **Tema:** Neon geometri, synthwave estetiği
@@ -109,7 +109,7 @@ Boot sahnesi Phaser Graphics API kullanarak tüm oyun texture'larını runtime'd
 
 ### 4.2 Menu.js — Başlık Ekranı
 
-- "TRIGON" başlık: 52px, cyan (#00ffcc), pembe stroke (#ff00aa), cyan glow
+- "TRIGONX" başlık: 52px, cyan (#00ffcc), pembe stroke (#ff00aa), cyan glow
 - "Neon Bullet Hell" alt başlık: 18px, açık mor (#ccaaff)
 - "Tap to Play" animasyonlu prompt: alpha 1↔0.35, 700ms yoyo loop
 - Herhangi bir dokunuşta → PlayScene'e geçiş

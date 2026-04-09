@@ -1,5 +1,5 @@
 /**
- * Trigon Achievement System
+ * Trigonx Achievement System
  * Defines all unlockable achievements and their criteria.
  */
 

@@ -1,4 +1,4 @@
-# TRIGON — Play Store'a Kadar Adım Adım Deploy Kılavuzu
+# TRIGONX — Play Store'a Kadar Adım Adım Deploy Kılavuzu
 
 > **Son Güncelleme:** 7 Nisan 2026  
 > **Başlangıç Noktası:** Kod hazır, `npm run build` çalışıyor  
@@ -62,7 +62,7 @@ Android Studio açıldığında Gradle sync otomatik başlar. Sync tamamlanana k
 android {
     compileSdk 36
     defaultConfig {
-        applicationId "com.trigon.game"
+        applicationId "com.trigonx.game"
         minSdk 24
         targetSdk 36
         versionCode 1
@@ -107,8 +107,8 @@ Gerçek cihazda çalışırken Chrome'dan canlı profil alabilirsin:
 
 ```bash
 keytool -genkey -v \
-  -keystore trigon-release.keystore \
-  -alias trigon \
+  -keystore trigonx-release.keystore \
+  -alias trigonx \
   -keyalg RSA \
   -keysize 2048 \
   -validity 10000
@@ -121,9 +121,9 @@ keytool -genkey -v \
 `android/` klasöründe `keystore.properties` adında bir dosya oluştur (git'e ekleme):
 
 ```properties
-storeFile=../../trigon-release.keystore
+storeFile=../../trigonx-release.keystore
 storePassword=ŞIFRE_BURAYA
-keyAlias=trigon
+keyAlias=trigonx
 keyPassword=ŞIFRE_BURAYA
 ```
 
@@ -184,7 +184,7 @@ cd android
 ### 4.1 İlk uygulama kaydı
 
 1. [play.google.com/console](https://play.google.com/console) → **Uygulama Oluştur**
-2. **Uygulama adı:** Trigon  
+2. **Uygulama adı:** Trigonx  
 3. **Varsayılan dil:** İngilizce (veya Türkçe)  
 4. **Uygulama veya oyun:** Oyun  
 5. **Ücretsiz veya ücretli:** **Ücretli** (dikkat: ücretli seçildikten sonra ücretsize geçilemez)
@@ -253,7 +253,7 @@ Play Store, gizlilik politikası URL'i zorunlu tutar. Hızlı çözüm:
 
 Sol menü → **Politika → Uygulama içeriği → Veri güvenliği**
 
-Trigon için doğru cevaplar:
+Trigonx için doğru cevaplar:
 
 | Soru | Cevap |
 |------|-------|
@@ -317,15 +317,15 @@ Google Play incelemesi genellikle **1-3 iş günü** sürer. Reddetme nedenleri:
 
 1. [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → **My Apps → +**
 2. **New App** → Platform: iOS
-3. **Bundle ID:** `com.trigon.game` (developer.apple.com → Identifiers'da önce kayıt et)
-4. **SKU:** `trigon-ios-001` (dahili takip kodu, mağazada görünmez)
-5. **Name:** `Trigon`
+3. **Bundle ID:** `com.trigonx.game` (developer.apple.com → Identifiers'da önce kayıt et)
+4. **SKU:** `trigonx-ios-001` (dahili takip kodu, mağazada görünmez)
+5. **Name:** `Trigonx`
 6. **Primary Language:** English (veya Turkish)
 
 **Bundle ID oluşturma (developer.apple.com → Certificates, IDs & Profiles → Identifiers):**
 - **+** → App IDs → App → Continue
-- Description: `Trigon Game`
-- Bundle ID (Explicit): `com.trigon.game`
+- Description: `Trigonx Game`
+- Bundle ID (Explicit): `com.trigonx.game`
 - Capabilities: gerekmiyor (Push Notification, Sign in with Apple vb. yok)
 - Register
 
@@ -343,7 +343,7 @@ Xcode açıldığında `App` target'ını seç (sol panelde `App` → `Targets �
 
 | Alan | Değer |
 |------|-------|
-| Bundle Identifier | `com.trigon.game` |
+| Bundle Identifier | `com.trigonx.game` |
 | Version | `1.0.0` |
 | Build | `1` |
 | Deployment Target | iOS 16.0+ |
@@ -400,7 +400,7 @@ Native splash görseli için:
 **Safari Web Inspector ile debug (iPhone):**
 
 1. iPhone → **Ayarlar → Safari → Gelişmiş → Web Inspector**'u aç
-2. Mac'te Safari → **Develop → [cihaz adı] → Trigon WebView**
+2. Mac'te Safari → **Develop → [cihaz adı] → Trigonx WebView**
 3. Console, Network, Performance sekmelerini kullan
 
 ---
@@ -422,7 +422,7 @@ App Store Connect'te:
 
 ### 6.8 Ücretli Uygulama Fiyatlandırması
 
-App Store Connect → **My Apps → Trigon → Pricing and Availability:**
+App Store Connect → **My Apps → Trigonx → Pricing and Availability:**
 
 1. **Price:** istediğin fiyat katmanını seç (Tier 1 = $0.99 / ₺39.99, Tier 2 = $1.99 / ₺79.99, vb.)
 2. Apple, yerel para birimlerini otomatik hesaplar
@@ -439,7 +439,7 @@ App Store Connect → **App Store → App Information + Version Information:**
 
 | Alan | İçerik |
 |------|--------|
-| Name | Trigon |
+| Name | Trigonx |
 | Subtitle (30 karakter) | *Neon Bullet Hell Survivor* |
 | Privacy Policy URL | Zorunlu |
 | Category | Games → Action (veya Arcade) |

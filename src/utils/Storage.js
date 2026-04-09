@@ -1,5 +1,5 @@
-const AUDIO_SETTINGS_KEY = 'trigon.audio.settings.v1';
-const GAME_PROFILE_KEY = 'trigon.game.profile.v1';
+const AUDIO_SETTINGS_KEY = 'trigonx.audio.settings.v1';
+const GAME_PROFILE_KEY = 'trigonx.game.profile.v1';
 
 const DEFAULT_AUDIO_SETTINGS = {
   masterVolume: 0.9,

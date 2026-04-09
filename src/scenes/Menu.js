@@ -59,7 +59,7 @@ export default class Menu extends Phaser.Scene {
     const profile = loadGameProfile();
 
     this.titleText = this.add
-      .text(width / 2, height * 0.25, 'TRIGON', {
+      .text(width / 2, height * 0.25, 'TRIGONX', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '52px',
         fontStyle: 'bold',

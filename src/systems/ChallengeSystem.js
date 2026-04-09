@@ -1,5 +1,5 @@
 /**
- * Trigon Challenge System
+ * Trigonx Challenge System
  * Handles daily mutators and challenge run logic.
  */
 

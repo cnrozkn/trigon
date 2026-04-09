@@ -1,10 +1,10 @@
-# TRIGON — Canlıya Çıkış Hazırlık Listesi (RELEASE CHECKLIST)
+# TRIGONX — Canlıya Çıkış Hazırlık Listesi (RELEASE CHECKLIST)
 
 > **Son Güncelleme:** 7 Nisan 2026  
 > **Referans:** [PRD.md](./PRD.md) · [DEPLOY_GUIDE.md](./DEPLOY_GUIDE.md)  
 > **Durum:** Üretim Öncesi (Pre-Production)
 
-Bu döküman, Trigon'un App Store ve Google Play Store'da **ücretli** olarak yayınlanması için gereken kritik adımları ve teknik kontrolleri içerir.
+Bu döküman, Trigonx'un App Store ve Google Play Store'da **ücretli** olarak yayınlanması için gereken kritik adımları ve teknik kontrolleri içerir.
 
 ---
 
@@ -34,9 +34,9 @@ Bu döküman, Trigon'un App Store ve Google Play Store'da **ücretli** olarak ya
 - [ ] Native projelerin senkronizasyonu: `npm run cap:sync`
 - [ ] iOS projesi oluşturuldu: `npm run cap:add:ios`
 - [ ] Android projesi oluşturuldu: `npm run cap:add:android`
-- [ ] `capacitor.config.json` → `appId: "com.trigon.game"` doğru
-- [ ] iOS: Xcode → Bundle ID `com.trigon.game`, Team seçili, Signing otomatik
-- [ ] Android: `android/app/build.gradle` → `applicationId "com.trigon.game"`, `targetSdk 36`
+- [ ] `capacitor.config.json` → `appId: "com.trigonx.game"` doğru
+- [ ] iOS: Xcode → Bundle ID `com.trigonx.game`, Team seçili, Signing otomatik
+- [ ] Android: `android/app/build.gradle` → `applicationId "com.trigonx.game"`, `targetSdk 36`
 
 ### 1.2 Kritik Native Eklentiler
 - [x] **Haptic Feedback:** `@capacitor/haptics` entegrasyonu — hit, crit, death, level-up, game-over olaylarına bağlandı (`src/platform/HapticService.js`)
@@ -56,7 +56,7 @@ Tek bir **1024×1024 PNG** master ikon hazırla. Araçlar otomatik boyutlandır�
 - Boyut: tam 1024×1024 px
 - Format: PNG, **alfa kanalı YOK** (şeffaflık olmadan — Apple reddeder)
 - Köşe yuvarlaması yok (sistemler kendi uygular)
-- Neon/geometrik Trigon logosu — arka plan `#0a0a12` siyah üzerine beyaz/cyan üçgen
+- Neon/geometrik Trigonx logosu — arka plan `#0a0a12` siyah üzerine beyaz/cyan üçgen
 
 **iOS:**
 - [ ] Xcode → `App → Assets.xcassets → AppIcon` → 1024×1024 PNG sürüklendi
@@ -132,7 +132,7 @@ En az **2 adet** gerekir. Android Studio Emulator → `Pixel 8 Pro` (6.7") kulla
 
 | Alan | Karakter Limiti | Öneri |
 |------|-----------------|-------|
-| Name | 30 | `Trigon` |
+| Name | 30 | `Trigonx` |
 | Subtitle | 30 | `Neon Bullet Hell Survivor` |
 | Keywords | 100 | `bullet hell,neon,arcade,survivor,shooter,geometry,hypercasual` |
 | Promotional Text | 170 | İnceleme gerektirmez, dilediğinde değiştir |
@@ -151,7 +151,7 @@ En az **2 adet** gerekir. Android Studio Emulator → `Pixel 8 Pro` (6.7") kulla
 |------|-----------------|-------|
 | Kısa açıklama | 80 | `Neon geometri dünyasında hayatta kal. Hızlı, akıcı, bağımlılık yapıcı.` |
 | Tam açıklama | 4000 | Oyun mekaniği, prestige sistemi, özellikler |
-| Başlık | 50 | `Trigon` |
+| Başlık | 50 | `Trigonx` |
 
 - [ ] Başlık, kısa ve tam açıklama yazıldı
 - [ ] Kategori seçildi: **Oyunlar → Arcade**
@@ -161,7 +161,7 @@ En az **2 adet** gerekir. Android Studio Emulator → `Pixel 8 Pro` (6.7") kulla
 
 ### 2.5 Gizlilik Politikası
 
-Her iki mağaza da zorunlu tutar. Trigon için doğru içerik:
+Her iki mağaza da zorunlu tutar. Trigonx için doğru içerik:
 - Kullanıcı verisi toplanmıyor
 - Üçüncü tarafla paylaşım yok
 - `localStorage` sadece cihazda kalır (highscore, coins, upgrades)
@@ -208,7 +208,7 @@ Her iki mağaza da zorunlu tutar. Trigon için doğru içerik:
 ## 4. Yayınlama Adımları
 
 ### 4.1 iOS (App Store Connect)
-- [ ] Bundle ID `com.trigon.game` → [developer.apple.com](https://developer.apple.com/account/resources/identifiers) → Identifiers'da kayıtlı
+- [ ] Bundle ID `com.trigonx.game` → [developer.apple.com](https://developer.apple.com/account/resources/identifiers) → Identifiers'da kayıtlı
 - [ ] Xcode → **Product → Archive** (scheme: Release) tamamlandı
 - [ ] Organizer → **Distribute App → App Store Connect → Upload** tamamlandı
 - [ ] App Store Connect → build "Ready to Submit" durumunda
@@ -219,7 +219,7 @@ Her iki mağaza da zorunlu tutar. Trigon için doğru içerik:
 - [ ] **Manual Release** seçildiyse → yayınla düğmesine basıldı
 
 ### 4.2 Android (Google Play Console)
-- [ ] Keystore oluşturuldu ve güvenli yedeklendi (`trigon-release.keystore`)
+- [ ] Keystore oluşturuldu ve güvenli yedeklendi (`trigonx-release.keystore`)
 - [ ] `keystore.properties` → `android/` klasöründe, `.gitignore`'a eklendi
 - [ ] `build.gradle` → signing config eklendi
 - [ ] Release AAB üretildi: `cd android && ./gradlew bundleRelease`
