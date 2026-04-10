@@ -189,8 +189,11 @@ export default class AchievementsScene extends Phaser.Scene {
     profile.coins = (profile.coins || 0) + reward;
     profile.claimedAchievementRewards = [...(profile.claimedAchievementRewards || []), achId];
     saveGameProfile(profile);
-    this._scrollY = 0;
-    this._build();
+
+    // Refresh only the list content instead of the whole scene to preserve scroll position
+    const unlockedIds = new Set(profile.achievements || []);
+    const claimedIds  = new Set(profile.claimedAchievementRewards || []);
+    this._refreshList(unlockedIds, claimedIds, this.scale.width, this._listTop);
   }
 
   _refreshList(unlockedIds, claimedIds, width, listTop) {
