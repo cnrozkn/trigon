@@ -320,7 +320,7 @@ export default class UIScene extends Phaser.Scene {
     const backdrop = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0x050810, 0.6)
         .setInteractive();
 
-    const btnLabels = ['Resume', 'Settings', 'Restart', 'Menu'];
+    const btnLabels = ['Resume', 'Settings', 'Menu'];
     const btnCount = btnLabels.length;
     const btnH = Math.min(52, height * 0.08);
     const btnW = Math.min(220, width * 0.6);
@@ -351,7 +351,6 @@ export default class UIScene extends Phaser.Scene {
     const handlers = [
       () => playScene.togglePauseByUser(),
       () => this.scene.launch('SettingsScene', { fromScene: 'UIScene', isPauseContext: true }),
-      () => { playScene.scene.restart(); this.scene.restart(); },
       () => { playScene.scene.stop(); this.scene.start('Menu'); },
     ];
 
