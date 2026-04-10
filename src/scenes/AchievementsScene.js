@@ -152,14 +152,41 @@ export default class AchievementsScene extends Phaser.Scene {
     };
     draw(false);
 
-    const txt = this.add.text(0, 0, text, {
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: '16px',
-      fontStyle: 'bold',
-      color: '#e6f1ff',
-    }).setOrigin(0.5);
+    let content;
+    if (text.includes('←')) {
+      const labelText = text.replace('←', '').trim();
+      
+      // Create a graphics arrow for perfect cross-platform alignment
+      const arrow = this.add.graphics();
+      const arrowSize = 5;
+      arrow.lineStyle(2.5, 0xe6f1ff, 1);
+      arrow.beginPath();
+      arrow.moveTo(arrowSize, -arrowSize);
+      arrow.lineTo(0, 0);
+      arrow.lineTo(arrowSize, arrowSize);
+      arrow.strokePath();
+      
+      const label = this.add.text(12, 0, labelText, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#e6f1ff',
+      }).setOrigin(0, 0.5);
+      
+      content = this.add.container(0, 0, [arrow, label]);
+      const groupWidth = arrowSize + 12 + label.width;
+      arrow.x = -groupWidth / 2;
+      label.x = arrow.x + 12;
+    } else {
+      content = this.add.text(0, 0, text, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#e6f1ff',
+      }).setOrigin(0.5);
+    }
 
-    btn.add([bg, txt]);
+    btn.add([bg, content]);
 
     const zone = this.add.zone(0, 0, btnW, btnH).setInteractive({ useHandCursor: true });
     btn.add(zone);

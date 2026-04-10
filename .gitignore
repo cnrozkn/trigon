@@ -32,3 +32,8 @@ android/captures/
 
 # Tooling
 *.tsbuildinfo
+
+# Keystore — raw file stays local, encrypted (.enc) committed to repo
+keystore/*.jks
+keystore/*.keystore
+keystore/keystore.properties

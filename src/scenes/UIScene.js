@@ -489,18 +489,39 @@ export default class UIScene extends Phaser.Scene {
           this.scene.restart();
       });
 
-    const menuBtn = this.add
-      .text(width * 0.5, btnAreaY + Math.min(58, height * 0.09), '← Menu', {
+    const menuBtnX = width * 0.5;
+    const menuBtnY = btnAreaY + Math.min(58, height * 0.09);
+    const mSize = Math.min(16, width * 0.04);
+    
+    // Graphics arrow for perfect centering
+    const arrow = this.add.graphics();
+    const aSize = 4;
+    arrow.lineStyle(2, 0x88aadd, 1);
+    arrow.beginPath();
+    arrow.moveTo(aSize, -aSize);
+    arrow.lineTo(0, 0);
+    arrow.lineTo(aSize, aSize);
+    arrow.strokePath();
+    
+    const menuLabel = this.add.text(10, 0, 'Menu', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: Math.min(16, width * 0.04) + 'px',
+        fontSize: mSize + 'px',
         color: '#88aadd',
-      })
-      .setOrigin(0.5)
+    }).setOrigin(0, 0.5);
+    
+    const menuBtn = this.add.container(menuBtnX, menuBtnY, [arrow, menuLabel]).setDepth(20);
+    const mWidth = aSize + 10 + menuLabel.width;
+    arrow.x = -mWidth/2;
+    menuLabel.x = arrow.x + 10;
+
+    // Add hit zone for interaction
+    const menuZone = this.add.zone(0, 0, mWidth + 20, 30)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
           playScene.scene.stop();
           this.scene.start('Menu');
       });
+    menuBtn.add(menuZone);
 
     this.gameOverOverlay.add([panel, title, stats, restartBtn, menuBtn]);
   }

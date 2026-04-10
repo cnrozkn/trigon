@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Trigonx</string>
+    <string name="title_activity_main">Trigonx</string>
+    <string name="package_name">com.trigonx.game</string>
+    <string name="custom_url_scheme">com.trigonx.game</string>
+</resources>
