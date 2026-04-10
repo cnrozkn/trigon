@@ -311,10 +311,14 @@ export default class UIScene extends Phaser.Scene {
         this.pauseOverlay = this.add.container(0, 0).setDepth(230);
     }
     this.pauseOverlay.removeAll(true);
-    this.pauseOverlay.setVisible(true);
+    this.pauseOverlay.setVisible(true).setAlpha(0);
 
     const { width, height } = this.scale;
     const playScene = this.scene.get('PlayScene');
+
+    // Full-screen backdrop to block input and dim the game
+    const backdrop = this.add.rectangle(width * 0.5, height * 0.5, width, height, 0x050810, 0.6)
+        .setInteractive();
 
     const btnLabels = ['Resume', 'Settings', 'Restart', 'Menu'];
     const btnCount = btnLabels.length;
@@ -373,7 +377,15 @@ export default class UIScene extends Phaser.Scene {
       return [btnBg, btn];
     });
 
-    this.pauseOverlay.add([panel, title, ...btnObjs.flat()]);
+    this.pauseOverlay.add([backdrop, panel, title, ...btnObjs.flat()]);
+
+    // Simple fade-in animation
+    this.tweens.add({
+        targets: this.pauseOverlay,
+        alpha: 1,
+        duration: 200,
+        ease: 'Power2'
+    });
   }
 
   renderGameOverOverlay(result) {

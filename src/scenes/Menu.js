@@ -153,12 +153,15 @@ export default class Menu extends Phaser.Scene {
 
   setUIVisible(visible) {
     const alpha = visible ? 1 : 0;
-    if (this.titleText) this.titleText.setAlpha(alpha);
-    if (this.subText) this.subText.setAlpha(alpha);
-    if (this.hintText) this.hintText.setAlpha(alpha);
-    if (this.metaText) this.metaText.setAlpha(alpha);
-    if (this.buttonsContainer) this.buttonsContainer.setAlpha(alpha);
-    if (this.tapStartZone) {
+    const isSafe = (obj) => obj && obj.active && typeof obj.setAlpha === 'function';
+
+    if (isSafe(this.titleText)) this.titleText.setAlpha(alpha);
+    if (isSafe(this.subText)) this.subText.setAlpha(alpha);
+    if (isSafe(this.hintText)) this.hintText.setAlpha(alpha);
+    if (isSafe(this.metaText)) this.metaText.setAlpha(alpha);
+    if (isSafe(this.buttonsContainer)) this.buttonsContainer.setAlpha(alpha);
+    
+    if (this.tapStartZone && typeof this.tapStartZone.setInteractive === 'function') {
       if (visible) this.tapStartZone.setInteractive();
       else this.tapStartZone.disableInteractive();
     }

@@ -13,8 +13,13 @@ export default class SettingsScene extends Phaser.Scene {
   }
 
   create() {
+    const isFromMenu = this.fromScene === 'Menu';
     const menu = this.scene.get('Menu');
-    if (menu) menu.setUIVisible(false);
+    
+    // Only toggle Menu visibility if we actually came from there and it's active
+    if (isFromMenu && menu && this.scene.isActive('Menu')) {
+      menu.setUIVisible(false);
+    }
 
     const { width, height } = this.scale;
     this.audio = this.registry.get('audio') || null;
@@ -99,7 +104,9 @@ export default class SettingsScene extends Phaser.Scene {
 
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      if (menu) menu.setUIVisible(true);
+      if (isFromMenu && menu && this.scene.isActive('Menu')) {
+        menu.setUIVisible(true);
+      }
       this.scale.off('resize', this.handleResize, this);
     });
   }
