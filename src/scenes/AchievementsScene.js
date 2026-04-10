@@ -118,7 +118,7 @@ export default class AchievementsScene extends Phaser.Scene {
     this.listContainer = this.add.container(0, 0).setDepth(5).setMask(mask);
 
     const scrollZone = this.add.zone(0, listTop, width, this._maskH)
-      .setOrigin(0).setInteractive({ draggable: true }).setDepth(8);
+      .setOrigin(0).setInteractive({ draggable: true }).setDepth(4);
     scrollZone.on('dragstart', (_p, _x, y) => { this._dragStartY = y; });
     scrollZone.on('drag', (_p, _x, y) => {
       this._applyScroll(this._scrollY + (y - this._dragStartY) * 1.6);
