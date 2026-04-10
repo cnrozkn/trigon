@@ -44,9 +44,43 @@ npx cap sync           # dist/ → ios/ ve android/ kopyalar; plugin değişikli
 
 ---
 
-## Bölüm 2 — Android Build ve Gerçek Cihaz Testi
+## Bölüm 2 — Mağaza Görselleri
 
-### 2.1 Android Studio'yu aç
+### 2.1 App Icon
+
+Tek bir **1024×1024 PNG** master ikon hazırla; araçlar kalan boyutları otomatik türetir.
+
+**Gereksinimler:**
+- Format: PNG, **alfa kanalı yok** (şeffaflık — Apple reddeder)
+- Boyut: tam 1024×1024 px
+- Köşe yuvarlaması yok (işletim sistemleri kendi uygular)
+- Neon üçgen logo, arka plan `#0a0a12`
+
+**iOS:** Xcode → `App → Assets.xcassets → AppIcon` → 1024×1024 PNG sürükle. Xcode 26+ tüm boyutları otomatik türetir.
+
+**Android:** Adaptive Icon gerektirir (iki katman):
+- **Foreground:** 108×108 dp'de 72×72 dp'lik güvenli alanda logo
+- **Background:** düz renk `#0a0a12`
+- Android Studio → `res/mipmap` → **Image Asset Studio** ile üret (`android:icon` ve `android:roundIcon` otomatik ayarlanır)
+
+Hızlı araç: [appicon.co](https://appicon.co) — 1024×1024 yükle, iOS + Android için tüm boyutları indir.
+
+### 2.2 Gizlilik Politikası ve Destek URL'leri
+
+Her iki mağaza da zorunlu tutar. Bu repo'nun `docs/` klasöründe hazır HTML dosyaları mevcut:
+
+| Sayfa | Dosya | URL (GitHub Pages) |
+|-------|-------|--------------------|
+| Privacy Policy | `docs/privacy.html` | `https://canerozkan.github.io/trigon/privacy.html` |
+| Support | `docs/support.html` | `https://canerozkan.github.io/trigon/support.html` |
+
+**GitHub Pages aktifleştirme:** Repo → Settings → Pages → Source: `Deploy from a branch` → Branch: `main` / folder: `docs/`.
+
+---
+
+## Bölüm 3 — Android Build ve Gerçek Cihaz Testi
+
+### 3.1 Android Studio'yu aç
 
 ```bash
 npx cap open android
@@ -54,7 +88,7 @@ npx cap open android
 
 Android Studio açıldığında Gradle sync otomatik başlar. Sync tamamlanana kadar bekle.
 
-### 2.2 `build.gradle` ayarlarını kontrol et
+### 3.2 `build.gradle` ayarlarını kontrol et
 
 `android/app/build.gradle` içinde şunların doğru olduğunu kontrol et:
 
@@ -71,7 +105,7 @@ android {
 }
 ```
 
-### 2.3 Gerçek Android cihazda test
+### 3.3 Gerçek Android cihazda test
 
 1. Telefonda **Geliştirici Seçenekleri → USB Hata Ayıklama**'yı aç.
 2. Telefonu USB ile bağla.
@@ -90,7 +124,7 @@ android {
 | Notch / yuvarlak köşe | HUD elemanları ekrandan taşmaz |
 | Uzun oyun (~10 dakika) | FPS 60 sabit, bellek şişmez |
 
-### 2.4 Chrome DevTools ile performans izle (Android)
+### 3.4 Chrome DevTools ile performans izle (Android)
 
 Gerçek cihazda çalışırken Chrome'dan canlı profil alabilirsin:
 
@@ -101,9 +135,9 @@ Gerçek cihazda çalışırken Chrome'dan canlı profil alabilirsin:
 
 ---
 
-## Bölüm 3 — Android İmzalama ve AAB Üretimi
+## Bölüm 4 — Android İmzalama ve AAB Üretimi
 
-### 3.1 Keystore oluştur (bir kez, güvenli sakla)
+### 4.1 Keystore oluştur (bir kez, güvenli sakla)
 
 ```bash
 keytool -genkey -v \
@@ -116,7 +150,7 @@ keytool -genkey -v \
 
 > ⚠️ Bu dosyayı ve şifrelerini kaybet = Play Store hesabına bir daha uygulama güncelleyemezsin. Git'e ekleme, harici yedekle.
 
-### 3.2 `keystore.properties` dosyası oluştur
+### 4.2 `keystore.properties` dosyası oluştur
 
 `android/` klasöründe `keystore.properties` adında bir dosya oluştur (git'e ekleme):
 
@@ -127,7 +161,7 @@ keyAlias=trigonx
 keyPassword=ŞIFRE_BURAYA
 ```
 
-### 3.3 `build.gradle`'a signing config ekle
+### 4.3 `build.gradle`'a signing config ekle
 
 `android/app/build.gradle` dosyasını aç, `android { }` bloğuna ekle:
 
@@ -154,7 +188,7 @@ android {
 }
 ```
 
-### 3.4 Release AAB üret
+### 4.4 Release AAB üret
 
 Android Studio'da:
 
@@ -171,9 +205,9 @@ cd android
 
 ---
 
-## Bölüm 4 — Google Play Console'a Yükleme
+## Bölüm 5 — Google Play Console'a Yükleme
 
-### 4.0 Google Play Geliştirici Hesabı
+### 5.0 Google Play Geliştirici Hesabı
 
 - [play.google.com/console](https://play.google.com/console) → **Başlarken** → **$25 tek seferlik** kayıt ücreti öde
 - Bireysel veya şirket hesabı seçilebilir
@@ -181,7 +215,7 @@ cd android
 - **Ücretli uygulama için:** Payments Center → banka ve vergi bilgilerini doldur (IBAN + kimlik bilgileri gerekir)
 - **Google'ın kesintisi:** %30 (ilk $1M için %15 — Google Play Media Experience Program)
 
-### 4.1 İlk uygulama kaydı
+### 5.1 İlk uygulama kaydı
 
 1. [play.google.com/console](https://play.google.com/console) → **Uygulama Oluştur**
 2. **Uygulama adı:** Trigonx  
@@ -192,7 +226,7 @@ cd android
 **Fiyatlandırma:**
 Sol menü → **Para Kazanma → Fiyatlar** → fiyat katmanını seç (ör. $1.99 → ₺79.99 otomatik hesaplanır)
 
-### 4.2 Dahili Test (Internal Testing) — Gerçek cihaz testi
+### 5.2 Dahili Test (Internal Testing) — Gerçek cihaz testi
 
 > Bu aşama herkese açık değil, sadece davet ettiğin test kullanıcıları yükleyebilir. Yayına almadan önce burada test et.
 
@@ -212,7 +246,7 @@ Sol menü → **Para Kazanma → Fiyatlar** → fiyat katmanını seç (ör. $1.
 | Kayıt | Prestige coin'leri, yüksek skor kaydediliyor |
 | Çöküş | Uzun oturumda crash yok |
 
-### 4.3 Store Listeleme (Store Listing) — Zorunlu alanlar
+### 5.3 Store Listeleme (Store Listing) — Zorunlu alanlar
 
 Sol menü → **Mağaza varlıkları → Ana mağaza listesi**
 
@@ -226,30 +260,28 @@ Sol menü → **Mağaza varlıkları → Ana mağaza listesi**
 | Öne çıkan görsel | 1024×500 JPG/PNG |
 | Ekran görüntüleri | Telefon: en az 2 adet, 16:9 veya 9:16 |
 | Kategori | Oyunlar → Arcade |
-| Gizlilik politikası URL | Zorunlu — hosting gerektiriyor |
+| Gizlilik politikası URL | `https://canerozkan.github.io/trigon/privacy.html` |
 
 **Ekran görüntüsü için hızlı yöntem:** Android Studio Emulator'da `Pixel 8 Pro` seç, ekran görüntüsü al (540dpi, 6.7").
 
-### 4.4 İçerik Derecelendirmesi
+### 5.4 İçerik Derecelendirmesi
 
 Sol menü → **Politika → Uygulama içeriği → Derecelendirme**
 
 Anketi doldur: şiddet yok (soyut geometri), kumar yok, kullanıcı verisi yok → **PEGI 3 / Everyone** çıkar.
 
-### 4.5 Hedef Kitle
+### 5.5 Hedef Kitle
 
 Sol menü → **Politika → Uygulama içeriği → Hedef kitle**
 
 **18+** seç (çizgi film yok, hedef 15-35 yaş belirtilmişti) ya da **13+** seçersen çocuklara yönelik sorular çıkar — dikkatli ol.
 
-### 4.6 Gizlilik Politikası
+### 5.6 Gizlilik Politikası
 
-Play Store, gizlilik politikası URL'i zorunlu tutar. Hızlı çözüm:
-- [privacypolicygenerator.info](https://www.privacypolicygenerator.info) gibi bir üretici kullan
-- Üretilen metni GitHub Pages, Notion veya kendi domainine yükle
-- Sadece `localStorage` kullanıyorsun, üçüncü taraf veri paylaşımı yok — bunu politikaya yaz
+Play Store, gizlilik politikası URL'i zorunlu tutar. Bu repo'daki hazır dosyayı kullan:
+`docs/privacy.html` → GitHub Pages üzerinden: `https://canerozkan.github.io/trigon/privacy.html`
 
-### 4.7 Veri Güvenliği (Data Safety)
+### 5.7 Veri Güvenliği (Data Safety)
 
 Sol menü → **Politika → Uygulama içeriği → Veri güvenliği**
 
@@ -263,9 +295,9 @@ Trigonx için doğru cevaplar:
 
 ---
 
-## Bölüm 5 — Üretim Sürümü ve İnceleme
+## Bölüm 6 — Üretim Sürümü ve İnceleme
 
-### 5.1 Production track'e terfi
+### 6.1 Production track'e terfi
 
 Dahili test başarılıysa:
 
@@ -275,14 +307,14 @@ Dahili test başarılıysa:
 3. AAB'ı yükle, sürüm notlarını yaz
 4. **İncelemeye gönder**
 
-### 5.2 İnceleme süresi
+### 6.2 İnceleme süresi
 
 Google Play incelemesi genellikle **1-3 iş günü** sürer. Reddetme nedenleri:
 - Gizlilik politikası eksik/bozuk URL
 - Ekran görüntüleri yetersiz kalitede
 - Metadata'da yanıltıcı içerik
 
-### 5.3 Yayın sonrası kontrol
+### 6.3 Yayın sonrası kontrol
 
 İnceleme onaylandıktan sonra:
 - Play Store'da arama yap, uygulama görünüyor mu?
@@ -291,9 +323,9 @@ Google Play incelemesi genellikle **1-3 iş günü** sürer. Reddetme nedenleri:
 
 ---
 
-## Bölüm 6 — iOS (App Store) — Detaylı Kılavuz
+## Bölüm 7 — iOS (App Store) — Detaylı Kılavuz
 
-### 6.1 Ön Koşullar
+### 7.1 Ön Koşullar
 
 - **Mac bilgisayar** (zorunlu — iOS build sadece macOS'ta yapılır)
 - **Xcode 26+** (App Store → ücretsiz)
@@ -304,7 +336,7 @@ Google Play incelemesi genellikle **1-3 iş günü** sürer. Reddetme nedenleri:
 
 ---
 
-### 6.2 Apple Developer Hesabı ve Sertifika
+### 7.2 Apple Developer Hesabı ve Sertifika
 
 1. [developer.apple.com/account](https://developer.apple.com/account) → **Enroll** → bireysel veya şirket seç
 2. $99 ödeme → onay genellikle **birkaç saat – 1 iş günü** sürer
@@ -313,7 +345,7 @@ Google Play incelemesi genellikle **1-3 iş günü** sürer. Reddetme nedenleri:
 
 ---
 
-### 6.3 App Store Connect — Uygulama Kaydı
+### 7.3 App Store Connect — Uygulama Kaydı
 
 1. [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → **My Apps → +**
 2. **New App** → Platform: iOS
@@ -331,7 +363,7 @@ Google Play incelemesi genellikle **1-3 iş günü** sürer. Reddetme nedenleri:
 
 ---
 
-### 6.4 Xcode Ayarları
+### 7.4 Xcode Ayarları
 
 ```bash
 npm run cap:open:ios    # Xcode açılır
@@ -356,7 +388,7 @@ Xcode açıldığında `App` target'ını seç (sol panelde `App` → `Targets �
 
 ---
 
-### 6.5 iOS İkon ve Splash Screen
+### 7.5 iOS İkon ve Splash Screen
 
 **App Icon:**
 
@@ -377,7 +409,7 @@ Native splash görseli için:
 
 ---
 
-### 6.6 Gerçek iPhone'da Test
+### 7.6 Gerçek iPhone'da Test
 
 1. iPhone'u USB ile Mac'e bağla
 2. İlk bağlantıda iPhone'da **"Trust This Computer"** onayla
@@ -405,7 +437,7 @@ Native splash görseli için:
 
 ---
 
-### 6.7 TestFlight — Dahili Test
+### 7.7 TestFlight — Dahili Test
 
 1. Xcode → **Product → Archive** (scheme: Release, destination: Any iOS Device)
 2. Archive tamamlandığında **Organizer** penceresi açılır
@@ -420,7 +452,7 @@ App Store Connect'te:
 
 ---
 
-### 6.8 Ücretli Uygulama Fiyatlandırması
+### 7.8 Ücretli Uygulama Fiyatlandırması
 
 App Store Connect → **My Apps → Trigonx → Pricing and Availability:**
 
@@ -433,7 +465,7 @@ App Store Connect → **My Apps → Trigonx → Pricing and Availability:**
 
 ---
 
-### 6.9 Store Listing — App Store
+### 7.9 Store Listing — App Store
 
 App Store Connect → **App Store → App Information + Version Information:**
 
@@ -441,7 +473,7 @@ App Store Connect → **App Store → App Information + Version Information:**
 |------|--------|
 | Name | Trigonx |
 | Subtitle (30 karakter) | *Neon Bullet Hell Survivor* |
-| Privacy Policy URL | Zorunlu |
+| Privacy Policy URL | `https://canerozkan.github.io/trigon/privacy.html` |
 | Category | Games → Action (veya Arcade) |
 | Age Rating | 4+ (soyut geometri, şiddet yok) |
 | Screenshots (iPhone 6.9") | En az 3 adet, 1320×2868 px |
@@ -449,11 +481,11 @@ App Store Connect → **App Store → App Information + Version Information:**
 | Promotional Text (170 kar.) | Değişiklik için inceleme gerekmez |
 | Description | Oyun mekaniği, prestige sistemi, özellikler |
 | Keywords (100 karakter) | `bullet hell,neon,arcade,survivor,shooter,hypercasual` |
-| Support URL | GitHub Pages veya kendi domain |
+| Support URL | `https://canerozkan.github.io/trigon/support.html` |
 
 ---
 
-### 6.10 App Review Gönderimi
+### 7.10 App Review Gönderimi
 
 1. App Store Connect → **Pricing** doldur
 2. **Banking/Tax** bilgileri tamamlandı mı kontrol et (ücretli uygulama için zorunlu)
@@ -471,7 +503,7 @@ App Store Connect → **App Store → App Information + Version Information:**
 
 ---
 
-### 6.11 iOS'a Özgü Kontroller
+### 7.11 iOS'a Özgü Kontroller
 
 | Kontrol | Detay |
 |---------|-------|
@@ -481,6 +513,17 @@ App Store Connect → **App Store → App Information + Version Information:**
 | Notch | Üst HUD elemanları notch'a girmiyor mu? |
 | Haptic | `@capacitor/haptics` vuruşlarda titreşim veriyor mu? |
 | Arka plan müzik | Telefon sessiz modundayken (ring/silent switch) ses durumu? |
+
+---
+
+## Bölüm 8 — Yayın Sonrası (Post-Launch)
+
+- Her iki mağazada temiz cihazdan **satın al → yükle → oyna** akışını test et
+- **Android Vitals** (Play Console → Android Vitals) → crash rate ve ANR oranını izle
+- **App Store Connect → Crashes** → crash log takibi
+- İlk hafta kullanıcı yorumlarına yanıt ver (her iki mağazada)
+- İlk hafta feedback'lerine göre denge (balance) güncellemesi planla
+- Her Play Store güncellemesinde `versionCode` artırmayı unutma
 
 ---
 
@@ -511,3 +554,25 @@ npx cap open ios
 | Major (2.0.0) | Yeniden tasarım, engine değişikliği | +1 |
 
 > Play Store'da her yüklemede `versionCode` mutlaka artmalıdır (integer, `versionName`'den bağımsız).
+
+---
+
+## Hızlı Kontrol Özeti
+
+| Adım | Platform | Durum |
+|------|----------|-------|
+| Apple Developer hesabı ($99/yıl) | iOS | ⬜ |
+| Google Play hesabı ($25 tek seferlik) | Android | ⬜ |
+| App Icon — 1024×1024 PNG (no alpha) | Her ikisi | ⬜ |
+| Adaptive Icon (Foreground + Background) | Android | ⬜ |
+| Splash Screen (`#0a0a12` arka plan) | Her ikisi | ⬜ |
+| Ekran görüntüleri (min. 3 iOS / 2 Android) | Her ikisi | ⬜ |
+| Privacy Policy URL yayında | Her ikisi | ⬜ |
+| Support URL yayında | iOS | ⬜ |
+| Banking + Tax bilgileri dolduruldu | Her ikisi | ⬜ |
+| Keystore oluşturuldu ve yedeklendi | Android | ⬜ |
+| Dahili test (Internal Testing) tamamlandı | Her ikisi | ⬜ |
+| Veri güvenliği formu dolduruldu | Android | ⬜ |
+| İçerik derecelendirmesi (PEGI 3 / Everyone) | Her ikisi | ⬜ |
+| Fiyat ayarlandı | Her ikisi | ⬜ |
+| Submit for Review gönderildi | Her ikisi | ⬜ |

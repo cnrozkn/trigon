@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Support — Trigonx</title>
+  <style>
+    :root {
+      --bg: #0a0a12;
+      --surface: #12121e;
+      --accent: #88ffff;
+      --text: #d0d0e8;
+      --muted: #6060a0;
+      --border: #1e1e3a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: 1.8rem;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 0.4rem;
+    }
+    h2 {
+      font-size: 1.1rem;
+      color: var(--accent);
+      margin: 2rem 0 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    p, li { color: var(--text); margin-bottom: 0.5rem; }
+    ul { padding-left: 1.4rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem 1.4rem;
+      margin: 1rem 0;
+    }
+    .faq-item { margin-bottom: 1.4rem; }
+    .faq-q {
+      font-weight: 600;
+      color: #c0c0e0;
+      margin-bottom: 0.3rem;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Trigonx</h1>
+      <p class="meta">Support &nbsp;·&nbsp; We're here to help</p>
+    </header>
+
+    <p>
+      Having trouble with Trigonx or have a question? Check the FAQ below or reach out to us directly.
+    </p>
+
+    <h2>Contact</h2>
+    <div class="card">
+      <p>
+        For bug reports, feedback, or any other inquiries, please open an issue on our GitHub repository:
+      </p>
+      <p style="margin-top: 0.8rem;">
+        <a href="https://github.com/canerozkan/trigon/issues" target="_blank" rel="noopener">
+          github.com/canerozkan/trigon/issues
+        </a>
+      </p>
+    </div>
+
+    <h2>Frequently Asked Questions</h2>
+
+    <div class="faq-item">
+      <p class="faq-q">My progress was lost after reinstalling the app.</p>
+      <p>
+        Game progress (high score, coins, upgrades) is stored locally on your device. Uninstalling
+        the app removes this data permanently. There is currently no cloud backup — this is a known
+        limitation we may address in a future update.
+      </p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">The game has no sound.</p>
+      <p>
+        On iOS, audio requires a screen tap to unlock due to browser restrictions. Tap anywhere on
+        the main menu to activate sound. Also check that your device is not in Silent Mode (ring/silent
+        switch on the side of iPhone).
+      </p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">The game runs slowly or drops frames.</p>
+      <p>
+        Trigonx targets 60 FPS on most modern devices. If you experience performance issues, try
+        closing background apps and restarting the game. Older devices may run at reduced frame rates.
+      </p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">Haptic feedback is not working.</p>
+      <p>
+        Make sure haptics are enabled in the in-game settings. Haptic feedback requires a real device
+        and does not work in simulators or emulators.
+      </p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">How do I reset my progress?</p>
+      <p>
+        Uninstalling and reinstalling the app will clear all saved data. There is no in-game reset
+        option at this time.
+      </p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">I found a bug or have a feature request.</p>
+      <p>
+        Please report it on
+        <a href="https://github.com/canerozkan/trigon/issues" target="_blank" rel="noopener">GitHub Issues</a>.
+        Include your device model and OS version to help us reproduce the issue.
+      </p>
+    </div>
+
+    <footer>
+      &copy; 2026 Trigonx &nbsp;·&nbsp;
+      <a href="privacy.html">Privacy Policy</a>
+    </footer>
+  </div>
+</body>
+</html>
