@@ -226,6 +226,12 @@ export default class UIScene extends Phaser.Scene {
         this.game.events.off('show_upgrade_selection');
         this.game.events.off('update_upgrade_selection');
         this.game.events.off('close_upgrade_selection');
+
+        // Null out overlay references so they are re-created correctly on next run
+        this.pauseOverlay = null;
+        this.gameOverOverlay = null;
+        this.upgradeOverlay = null;
+        this.onboardingOverlay = null;
     });
 
     this.scale.on('resize', this.handleResize, this);
