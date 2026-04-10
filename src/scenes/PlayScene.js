@@ -302,6 +302,10 @@ export default class PlayScene extends Phaser.Scene {
         clearTimeout(this.hitStopRestoreId);
         this.hitStopRestoreId = null;
       }
+      if (this._gameOverTimeoutId) {
+        clearTimeout(this._gameOverTimeoutId);
+        this._gameOverTimeoutId = null;
+      }
       if (this.onboardingTimer) {
         this.onboardingTimer.remove(false);
         this.onboardingTimer = null;
@@ -795,6 +799,7 @@ export default class PlayScene extends Phaser.Scene {
   addScaledScore(baseScore) {
     const amount = Math.round(baseScore * this.getScoreMultiplier());
     this.score += amount;
+    this.updateHud();
     return amount;
   }
 
@@ -896,9 +901,12 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   addCoins(amount) {
+    if (this.gameOver) return;
     const mult = (1 + this.coinBoost * 0.25) * (this.mutators.coinMult || 1);
     const finalAmount = Math.floor(amount * mult);
     this.coinsCollected += finalAmount;
+    this.audio?.playCoin?.();
+    this.updateHud();
   }
 
   persistRunStats() {
@@ -1103,11 +1111,6 @@ export default class PlayScene extends Phaser.Scene {
     return 0;
   }
 
-  onLevelCleared() {
-    if (!this.tookDamageInLevel) this.perfectLevels += 1;
-    this.tookDamageInLevel = false;
-    this.startNextLevelFlow();
-  }
 
   startNextLevelFlow() {
     this.levelClearPending = true;
@@ -1461,10 +1464,12 @@ export default class PlayScene extends Phaser.Scene {
 
   triggerBossDeathFx() {
     this.showQuickFlash(0.42, 140);
-    this.physics.world.timeScale = 0.3;
-    this.time.delayedCall(200, () => {
-      if (!this.gameOver) this.physics.world.timeScale = 1;
-    });
+    if (!this.gameOver) {
+      this.physics.world.timeScale = 0.3;
+      this.time.delayedCall(200, () => {
+        if (!this.gameOver) this.physics.world.timeScale = 1;
+      });
+    }
   }
 
   triggerLevelUpFx() {
@@ -1748,35 +1753,7 @@ export default class PlayScene extends Phaser.Scene {
     });
   }
 
-  // Combat & Economy Helpers
-  addCoins(amount) {
-    if (this.gameOver) return;
-    this.coinsCollectedInRun = (this.coinsCollectedInRun || 0) + amount;
-    this.audio?.playCoin?.();
-    this.updateHud();
-  }
-
-  addScaledScore(base) {
-    const gained = Math.round(base * this.getScoreMultiplier());
-    this.score += gained;
-    this.updateHud();
-    return gained;
-  }
-
-  emitImpactBurst(x, y, crit) {
-    this.vfx?.emitImpactBurst?.(x, y, crit);
-  }
-
-  showDamagePopup(x, y, damage, crit, frost) {
-    const label = frost ? `FROZEN ${damage}` : (crit ? `CRIT ${damage}` : `${damage}`);
-    if (crit) this.showFloatingText('+CRIT', x, y - 14, { color: '#ffdd77', size: 20, duration: 520 });
-    this.showFloatingText(label, x, y - 8, {
-       color: frost ? '#bce5ff' : (crit ? '#ffdd77' : '#ffffff'),
-       size: crit ? 18 : 12,
-       duration: 450,
-       scaleFrom: 0.8
-    });
-  }
+  // Combat & Economy Helpers (implementations are above; see addCoins, addScaledScore, emitImpactBurst, showDamagePopup)
 
   applySplashDamage(enemy, damage) {
     const radius = 64;
@@ -2120,7 +2097,21 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   triggerGameOver(playerSprite) {
+    // Guard: only trigger once
+    if (this.gameOver) return;
     this.gameOver = true;
+
+    // Cancel any pending hitStop restore immediately so it cannot
+    // re-enable the wave manager or reset timeScale after game over.
+    if (this.hitStopRestoreId) {
+      clearTimeout(this.hitStopRestoreId);
+      this.hitStopRestoreId = null;
+    }
+    this.hitStopActive = false;
+
+    // Reset timeScale before pausing physics to avoid a frozen-at-0.02 state.
+    this.physics.world.timeScale = 1;
+
     this.endFeverMode();
     this.killStreak = 0;
     this.comboTier = 0;
@@ -2130,12 +2121,16 @@ export default class PlayScene extends Phaser.Scene {
     if (this.shieldRingG) this.shieldRingG.clear();
 
     if (this.fireTimer) this.fireTimer.remove(false);
+    this.fireTimer = null;
     applyGameOverCombatCleanup(this);
 
     if (this.upgradeModal) {
       this.upgradeModal.destroy(true);
       this.upgradeModal = null;
     }
+    this.isChoosingUpgrade = false;
+    this.isPausedByUser = false;
+    this.onboardingActive = false;
     this.game.events.emit('close_upgrade_selection');
     this.game.events.emit('hide_onboarding');
     this.overlayBg?.setVisible(false);
@@ -2162,10 +2157,15 @@ export default class PlayScene extends Phaser.Scene {
       return true;
     });
 
-    this.time.delayedCall(420, () => {
+    // Use a wall-clock setTimeout instead of Phaser delayedCall so the
+    // game-over overlay always appears even if the Phaser timer loop is
+    // somehow stalled (e.g. tab is briefly backgrounded).
+    const showOverlay = () => {
+      if (!this.scene.isActive()) return;
       this.gameOverResult = this.persistRunStats();
       this.isGameOverScreenVisible = true;
       this.renderGameOverOverlay();
-    });
+    };
+    this._gameOverTimeoutId = setTimeout(showOverlay, 440);
   }
 }
