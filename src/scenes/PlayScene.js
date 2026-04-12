@@ -87,7 +87,7 @@ export default class PlayScene extends Phaser.Scene {
     this.feverThreshold = this.shipClass === 'glitch' ? Math.round(FEVER_STREAK_THRESHOLD * 0.65) : FEVER_STREAK_THRESHOLD;
     this.feverPeriodMult = this.shipClass === 'glitch' ? 0.75 : 1.0;
 
-    if (this.shipClass === 'titan') {
+    if (this.shipClass === 'heavy') {
       this.damageLevel += 1;
       this.shieldCharges = this.mutators.noShields ? 0 : this.shieldCharges + 1;
       this.fireRateLevel = -1;
@@ -600,7 +600,7 @@ export default class PlayScene extends Phaser.Scene {
       return true;
     });
 
-    if (this.isChoosingUpgrade) this.renderDraftModal();
+    // Upgrade selection is managed by UIScene via game events; no local re-render needed on resize.
   }
 
   emitPlayerTrail() {
@@ -965,6 +965,8 @@ export default class PlayScene extends Phaser.Scene {
       const waveNo = Math.max(0, waveCtx.waveIndex + 1);
       this.game.events.emit('update_wave', waveNo, waveCtx.totalWaves);
     }
+    const shipLabels = { striker: 'STRIKER', heavy: 'TITAN', ghost: 'GHOST', glitch: 'GLITCH' };
+    this.game.events.emit('update_ship', shipLabels[this.shipClass] || this.shipClass.toUpperCase());
   }
 
   updateComboHud() {
@@ -2027,7 +2029,7 @@ export default class PlayScene extends Phaser.Scene {
     this.vfx?.explodeSparkle(this.formationX, this.playerBaseY, 24);
     this.showFloatingText('OVERDRIVE!', this.scale.width * 0.5, this.scale.height * 0.45, { color: '#00ffcc', size: 38, duration: 1000 });
 
-    if (this.shipClass === 'titan') {
+    if (this.shipClass === 'heavy') {
       this.triggerPhalanx();
     } else if (this.shipClass === 'ghost') {
       this.triggerPhantomFleet();

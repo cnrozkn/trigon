@@ -59,6 +59,13 @@ export default class UIScene extends Phaser.Scene {
         color: '#ff78ff',
     }).setOrigin(0.5).setDepth(112).setAlpha(0);
 
+    this.hudShip = this.add.text(width - 24, st + 36, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#557799',
+    }).setOrigin(1, 0.5).setDepth(100);
+
     this.pauseButton = this.add.text(width - 24, st + 14, '||', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '22px',
@@ -153,6 +160,10 @@ export default class UIScene extends Phaser.Scene {
         this.drawOverdrive(charge, active);
     });
 
+    this.game.events.on('update_ship', (shipLabel) => {
+        this.hudShip?.setText(shipLabel);
+    });
+
     this.game.events.on('update_bars', (levelProgress, powerupProgress, powerupLabel) => {
         this.drawPowerupBar(powerupProgress, powerupLabel);
     });
@@ -167,6 +178,7 @@ export default class UIScene extends Phaser.Scene {
         this.overdriveBarBg?.setVisible(visible);
         this.overdriveBarFill?.setVisible(visible);
         this.overdriveBarText?.setVisible(visible);
+        this.hudShip?.setVisible(visible);
     });
 
     this.game.events.on('show_pause', (audioSettings) => {
@@ -226,6 +238,7 @@ export default class UIScene extends Phaser.Scene {
         this.game.events.off('show_upgrade_selection');
         this.game.events.off('update_upgrade_selection');
         this.game.events.off('close_upgrade_selection');
+        this.game.events.off('update_ship');
 
         // Null out overlay references so they are re-created correctly on next run
         this.pauseOverlay = null;
@@ -247,6 +260,7 @@ export default class UIScene extends Phaser.Scene {
     this.hudCombo.setPosition(width * 0.5, st + 98);
     this.hudFever.setPosition(width * 0.5, st + 138);
     this.pauseButton.setPosition(width - 24, st + 14);
+    this.hudShip?.setPosition(width - 24, st + 36);
     this.layoutTop();
     this.drawPowerupBar(0, '');
   }

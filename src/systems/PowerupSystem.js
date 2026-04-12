@@ -204,6 +204,15 @@ export default class PowerupSystem {
     return this.pierceRemainingMs > 0;
   }
 
+  forceGlobalSlow(strength, durationMs) {
+    this.slowStrength = strength;
+    this.slowMaxMs = durationMs;
+    this.slowRemainingMs = extendBuffRemainingMs({
+      remainingMs: this.slowRemainingMs,
+      addedMs: durationMs,
+    });
+  }
+
   getGlobalSlowMultiplier() {
     return this.slowRemainingMs > 0 ? this.slowStrength : 1;
   }

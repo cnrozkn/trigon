@@ -244,6 +244,7 @@ export default class Menu extends Phaser.Scene {
     const classContainer = this.add.container(width / 2, height * 0.52).setDepth(150);
     const profile = loadGameProfile();
     const ownedShips = profile.ownedShips || ['striker'];
+    const activeShip = profile.selectedShip || 'striker';
 
     const title = this.add.text(0, -180, 'Select Ship Model', {
       fontFamily: 'system-ui, sans-serif',
@@ -264,10 +265,11 @@ export default class Menu extends Phaser.Scene {
     classes.forEach((c, i) => {
       const y = -110 + i * 80;
       const isOwned = ownedShips.includes(c.id);
-      
+      const isActive = isOwned && c.id === activeShip;
+
       const btnBg = this.add.graphics();
-      btnBg.fillStyle(0x0a1022, isOwned ? 0.9 : 0.4);
-      btnBg.lineStyle(2, c.color, isOwned ? 0.8 : 0.2);
+      btnBg.fillStyle(isActive ? 0x0d1e3a : 0x0a1022, isOwned ? 0.9 : 0.4);
+      btnBg.lineStyle(isActive ? 3 : 2, c.color, isOwned ? (isActive ? 1.0 : 0.8) : 0.2);
       btnBg.fillRoundedRect(-140, y, 280, 68, 8);
       btnBg.strokeRoundedRect(-140, y, 280, 68, 8);
 
@@ -284,6 +286,15 @@ export default class Menu extends Phaser.Scene {
         color: isOwned ? '#aaa' : '#444',
       });
 
+      const activeBadge = isActive
+        ? this.add.text(118, y + 24, 'ACTIVE', {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '10px',
+            color: '#00ffcc',
+            fontStyle: 'bold',
+          }).setOrigin(1, 0.5)
+        : null;
+
       const zone = this.add.zone(0, y + 34, 280, 68).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => {
          if (this.audio) this.audio.playUpgradeSelect();
@@ -294,7 +305,9 @@ export default class Menu extends Phaser.Scene {
          }
       });
 
-      classContainer.add([btnBg, nameTxt, descTxt, zone]);
+      const items = [btnBg, nameTxt, descTxt, zone];
+      if (activeBadge) items.push(activeBadge);
+      classContainer.add(items);
     });
 
     const backBtn = this.add.text(0, 220, '[ BACK TO MENU ]', {
