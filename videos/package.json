@@ -1,0 +1,21 @@
+{
+  "name": "videos",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "studio": "remotion studio src/index.js",
+    "render": "remotion render src/index.js TrigonAd out/trigon-ad.mp4",
+    "render:hq": "remotion render src/index.js TrigonAd out/trigon-ad-hq.mp4 --codec=h264 --crf=18 --scale=1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@remotion/cli": "4.0.448",
+    "@remotion/player": "4.0.448",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "remotion": "4.0.448"
+  }
+}
