@@ -541,7 +541,7 @@ const CTASection = () => {
           letterSpacing: 4,
         }}
       >
-        APP STORE · GOOGLE PLAY
+        APP STORE
       </div>
     </AbsoluteFill>
   );
@@ -549,23 +549,42 @@ const CTASection = () => {
 
 // ── Root composition ──────────────────────────────────────────────────────────
 
+// Instagram Reels'de altta ~250px UI (like/comment/share) kaplıyor.
+// İçeriği üst 1670px'e sıkıştırıp altını boş bırakıyoruz.
+const INSTAGRAM_BOTTOM_SAFE = 250;
+
 export const TrigonAd = () => {
   return (
     <AbsoluteFill style={{ background: "#06061a", fontFamily: "system-ui, sans-serif" }}>
-      {/* Section 1: Hook with gameplay video — 0-90f (3s) */}
-      <Sequence from={0} durationInFrames={90}>
-        <HookSection />
-      </Sequence>
+      {/* içerik alanı — altta Instagram UI boşluğu kadar kısaltılmış */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: INSTAGRAM_BOTTOM_SAFE, overflow: "hidden" }}>
+        {/* Section 1: Hook with gameplay video — 0-90f (3s) */}
+        <Sequence from={0} durationInFrames={90}>
+          <HookSection />
+        </Sequence>
 
-      {/* Section 2: Feature slides — 90-330f (8s, 4 slides × 2s) */}
-      <Sequence from={90} durationInFrames={240}>
-        <FeaturesSection />
-      </Sequence>
+        {/* Section 2: Feature slides — 90-330f (8s, 4 slides × 2s) */}
+        <Sequence from={90} durationInFrames={240}>
+          <FeaturesSection />
+        </Sequence>
 
-      {/* Section 3: CTA — 330-450f (4s) */}
-      <Sequence from={330} durationInFrames={120}>
-        <CTASection />
-      </Sequence>
+        {/* Section 3: CTA — 330-450f (4s) */}
+        <Sequence from={330} durationInFrames={120}>
+          <CTASection />
+        </Sequence>
+      </div>
+
+      {/* Instagram link alanı — boş, koyu */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: INSTAGRAM_BOTTOM_SAFE,
+          background: "#06061a",
+        }}
+      />
     </AbsoluteFill>
   );
 };
