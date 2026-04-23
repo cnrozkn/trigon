@@ -211,7 +211,7 @@ export default class PlayScene extends Phaser.Scene {
     this.collisions = new CollisionManager(this);
 
     this.players = this.physics.add.group();
-    this.bullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite, maxSize: 220 });
+    this.bullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite, maxSize: 320 });
     this.enemyBullets = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite, maxSize: 260 });
     this.enemies = this.physics.add.group({ classType: Phaser.Physics.Arcade.Sprite });
     this.blackholes = this.add.group();
@@ -283,12 +283,6 @@ export default class PlayScene extends Phaser.Scene {
     this.game.events.on('banish_slot', (index) => this.banishDraftSlot(index));
 
     this.updateHud();
-
-    // Neon bloom — boosts the glow on bullets, neon strokes, and ADD-blend particles.
-    // Guarded because WebGL-only; Canvas fallback would silently skip.
-    if (this.renderer && this.renderer.type === Phaser.WEBGL && this.cameras.main.postFX) {
-      this.cameras.main.postFX.addBloom(0xffffff, 1, 1, 1.1, 1.2, 4);
-    }
 
     if (this.profile.totalGamesPlayed === 0) {
       this.time.delayedCall(200, () => this.startOnboarding());
@@ -1491,12 +1485,21 @@ export default class PlayScene extends Phaser.Scene {
 
   triggerBossDeathFx() {
     this.showQuickFlash(0.42, 140);
-    if (!this.gameOver) {
-      this.physics.world.timeScale = 0.3;
-      this.time.delayedCall(200, () => {
-        if (!this.gameOver) this.physics.world.timeScale = 1;
-      });
-    }
+    if (this.gameOver || this.hitStopActive) return;
+    this.physics.world.timeScale = 0.5;
+    const proxy = { t: 0.5 };
+    this.tweens.add({
+      targets: proxy,
+      t: 1.0,
+      duration: 320,
+      ease: 'Sine.easeOut',
+      onUpdate: () => {
+        if (!this.gameOver && !this.hitStopActive) this.physics.world.timeScale = proxy.t;
+      },
+      onComplete: () => {
+        if (!this.gameOver && !this.hitStopActive) this.physics.world.timeScale = 1;
+      },
+    });
   }
 
   triggerLevelUpFx() {
@@ -1755,9 +1758,14 @@ export default class PlayScene extends Phaser.Scene {
     if (this.gameOver || this.isChoosingUpgrade) return;
     this.audio?.playFire();
 
+    const ships = [];
     this.players.children.iterate((p) => {
-      if (!p || !p.active) return true;
+      if (p && p.active) ships.push(p);
+      return true;
+    });
+    if (ships.length === 0) return;
 
+    for (const p of ships) {
       if (this.synergyPlasmaBeam > 0) {
         this.spawnBullet(p.x, p.y - 40, 0, 'plasma_beam');
       } else {
@@ -1773,19 +1781,17 @@ export default class PlayScene extends Phaser.Scene {
         this.spawnBullet(p.x - 16, p.y - 24, -220, 'arc');
         this.spawnBullet(p.x + 16, p.y - 24, 220, 'arc');
       }
+    }
 
-      this.emitMuzzleFlash(p.x, p.y - 30);
+    for (const p of ships) this.emitMuzzleFlash(p.x, p.y - 30);
 
-      this.tweens.add({
-        targets: p,
-        scaleX: 1.14,
-        scaleY: 1.14,
-        duration: 70,
-        yoyo: true,
-        ease: 'Sine.easeOut',
-      });
-
-      return true;
+    this.tweens.add({
+      targets: ships,
+      scaleX: 1.14,
+      scaleY: 1.14,
+      duration: 70,
+      yoyo: true,
+      ease: 'Sine.easeOut',
     });
   }
 
@@ -1824,10 +1830,14 @@ export default class PlayScene extends Phaser.Scene {
       this.triggerBossDeathFx();
     } else this.audio?.playEnemyDeath();
 
-    this.vfx.explodeSparkle(x, y, isBoss ? 28 : 14);
-    this.vfx.explodeDeath(x, y, isBoss ? 36 : 18);
-    this.vfx.explodeGeo(x, y, isBoss ? 20 : 9);
-    this.emitEnemyWireframe(enemy, isBoss);
+    this.vfx.explodeSparkle(x, y, isBoss ? 18 : 14);
+    this.vfx.explodeDeath(x, y, isBoss ? 22 : 18);
+    if (isBoss) {
+      this.time.delayedCall(16, () => this.vfx.explodeGeo(x, y, 12));
+    } else {
+      this.vfx.explodeGeo(x, y, 9);
+      this.emitEnemyWireframe(enemy, false);
+    }
 
     if (enemy.getData('splitOnDeath') && !isBoss) {
       this.spawnFromWave({ type: 'splitterMini', x: x - 12, y: y - 4, vx: -130, spawnDelay: 0 });
