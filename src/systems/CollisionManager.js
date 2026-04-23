@@ -89,7 +89,7 @@ export default class CollisionManager {
     if (this.scene.shipClass === 'glitch' && Math.random() < 0.22 && hp > 0) {
       const targets = this.scene.enemies.getChildren().filter(e => e.active && e !== enemy);
       if (targets.length > 0) {
-        const target = Phaser.Utils.Array.GetRandom(targets);
+        const target = targets[Math.floor(Math.random() * targets.length)];
         this.scene.physics.moveToObject(bullet, target, Math.abs(bullet.body.velocity.y) * 1.2);
         bullet.setData('hitLockUntil', now + 120);
         this.scene.showFloatingText('GLITCH', bullet.x, bullet.y, { color: '#ffeeaa', size: 10, duration: 250 });
