@@ -284,6 +284,12 @@ export default class PlayScene extends Phaser.Scene {
 
     this.updateHud();
 
+    // Neon bloom — boosts the glow on bullets, neon strokes, and ADD-blend particles.
+    // Guarded because WebGL-only; Canvas fallback would silently skip.
+    if (this.renderer && this.renderer.type === Phaser.WEBGL && this.cameras.main.postFX) {
+      this.cameras.main.postFX.addBloom(0xffffff, 1, 1, 1.1, 1.2, 4);
+    }
+
     if (this.profile.totalGamesPlayed === 0) {
       this.time.delayedCall(200, () => this.startOnboarding());
     }
@@ -701,16 +707,35 @@ export default class PlayScene extends Phaser.Scene {
     const actualRadius = NEAR_MISS_RADIUS_PX + (this.nearMissOffset || 0);
     const radiusSq = actualRadius * actualRadius;
 
+    // Cache player positions + bodies once per frame.
+    const playerCount = players.length;
+    const px = new Float32Array(playerCount);
+    const py = new Float32Array(playerCount);
+    const phw = new Float32Array(playerCount);
+    const phh = new Float32Array(playerCount);
+    for (let i = 0; i < playerCount; i += 1) {
+      const p = players[i];
+      px[i] = p.x;
+      py[i] = p.y;
+      phw[i] = (p.body?.halfWidth) || (p.displayWidth * 0.5) || 0;
+      phh[i] = (p.body?.halfHeight) || (p.displayHeight * 0.5) || 0;
+    }
+
     this.enemies.children.iterate((enemy) => {
       if (!enemy || !enemy.active) return true;
       const nextAllowedAt = enemy.getData('nearMissLockUntil') || 0;
       if (nextAllowedAt > now) return true;
 
-      for (let i = 0; i < players.length; i += 1) {
-        const p = players[i];
-        if (this.physics.overlap(p, enemy)) return true;
-        const dx = enemy.x - p.x;
-        const dy = enemy.y - p.y;
+      const ex = enemy.x;
+      const ey = enemy.y;
+      const ehw = (enemy.body?.halfWidth) || (enemy.displayWidth * 0.5) || 0;
+      const ehh = (enemy.body?.halfHeight) || (enemy.displayHeight * 0.5) || 0;
+
+      for (let i = 0; i < playerCount; i += 1) {
+        // AABB overlap test replaces physics.overlap() (which performs the same check far more expensively).
+        if (Math.abs(ex - px[i]) <= ehw + phw[i] && Math.abs(ey - py[i]) <= ehh + phh[i]) return true;
+        const dx = ex - px[i];
+        const dy = ey - py[i];
         if (dx * dx + dy * dy > radiusSq) continue;
 
         enemy.setData('nearMissLockUntil', now + NEAR_MISS_COOLDOWN_MS);
@@ -1632,6 +1657,9 @@ export default class PlayScene extends Phaser.Scene {
 
   updateBlackholes() {
     const now = this.time.now;
+    const PULL_R = 260;
+    const PULL_R_SQ = PULL_R * PULL_R;
+    const ABSORB_R_SQ = 20 * 20;
     this.blackholes.children.iterate((bh) => {
       if (bh && bh.active) {
         bh.rotation += 0.04;
@@ -1643,28 +1671,34 @@ export default class PlayScene extends Phaser.Scene {
           const dx = bh.x - this.targetFormationX;
           const dy = bh.y - this.playerBaseY;
           const dist = Math.max(1, Math.hypot(dx, dy));
-          if (dist < 260) {
-            const force = (260 - dist) / 260; // 0 to 1
+          if (dist < PULL_R) {
+            const force = (PULL_R - dist) / PULL_R;
             this.targetFormationX += (dx / dist) * force * 1.5;
           }
-          // Pull bullets
+          // Pull bullets — squared-distance prefilter + batched absorb FX
+          let absorbCount = 0;
           this.bullets.children.iterate((b) => {
              if (b && b.active) {
                 const bdx = bh.x - b.x;
                 const bdy = bh.y - b.y;
-                const bdist = Math.max(1, Math.hypot(bdx, bdy));
-                if (bdist < 260) {
-                   const bforce = (260 - bdist) / 260;
-                   b.x += (bdx / bdist) * bforce * 4.5;
-                   b.y += (bdy / bdist) * bforce * 2.5; 
-                   if (bdist < 20) {
+                const dSq = bdx * bdx + bdy * bdy;
+                if (dSq < PULL_R_SQ) {
+                   const bdist = Math.max(1, Math.sqrt(dSq));
+                   const bforce = (PULL_R - bdist) / PULL_R;
+                   const inv = 1 / bdist;
+                   b.x += bdx * inv * bforce * 4.5;
+                   b.y += bdy * inv * bforce * 2.5;
+                   if (dSq < ABSORB_R_SQ) {
                       this.recycleBullet(b);
-                      this.emitMuzzleFlash(bh.x, bh.y);
+                      absorbCount += 1;
                    }
                 }
              }
              return true;
           });
+          if (absorbCount > 0) {
+            this.emitMuzzleFlash(bh.x, bh.y);
+          }
         }
       }
       return true;

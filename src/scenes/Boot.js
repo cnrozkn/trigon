@@ -198,31 +198,31 @@ export default class Boot extends Phaser.Scene {
       g.destroy();
     }
 
-    // Particle shards
+    // Particle shards (2x resolution for retina sharpness)
     {
-      const g = mk(8, 8);
+      const g = mk(16, 16);
       g.fillStyle(0xff88ee, 1);
-      g.fillRect(1, 1, 6, 6);
-      g.generateTexture('particle_square', 8, 8);
-      g.destroy();
-    }
-    {
-      const g = mk(6, 6);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(3, 3, 2.5);
-      g.generateTexture('particle_dot', 6, 6);
+      g.fillRect(2, 2, 12, 12);
+      g.generateTexture('particle_square', 16, 16);
       g.destroy();
     }
     {
       const g = mk(12, 12);
       g.fillStyle(0xffffff, 1);
+      g.fillCircle(6, 6, 5);
+      g.generateTexture('particle_dot', 12, 12);
+      g.destroy();
+    }
+    {
+      const g = mk(24, 24);
+      g.fillStyle(0xffffff, 1);
       g.beginPath();
-      g.moveTo(6, 0);
-      g.lineTo(12, 12);
-      g.lineTo(0, 12);
+      g.moveTo(12, 0);
+      g.lineTo(24, 24);
+      g.lineTo(0, 24);
       g.closePath();
       g.fillPath();
-      g.generateTexture('vfx_particle_tri', 12, 12);
+      g.generateTexture('vfx_particle_tri', 24, 24);
       g.destroy();
     }
 

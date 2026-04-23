@@ -64,6 +64,8 @@ async function startGame() {
       antialiasGL: true,
       roundPixels: false,
       powerPreference: 'high-performance',
+      autoDensity: true,
+      resolution: Math.min(window.devicePixelRatio || 1, 2),
       scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,

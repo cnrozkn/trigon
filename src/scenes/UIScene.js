@@ -29,35 +29,35 @@ export default class UIScene extends Phaser.Scene {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '18px',
         color: '#aaffff',
-    }).setOrigin(0, 0.5).setDepth(100);
+    }).setOrigin(0, 0.5).setDepth(100).setStroke('#0a0a12', 2).setShadow(0, 1, '#000000', 2, true, true);
 
     this.hudLevel = this.add.text(16, st + 18, 'LV.1', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '15px',
         fontStyle: 'bold',
         color: '#ccddff',
-    }).setOrigin(0, 0.5).setDepth(100);
+    }).setOrigin(0, 0.5).setDepth(100).setStroke('#0a0a12', 2).setShadow(0, 1, '#000000', 2, true, true);
 
     this.hudWave = this.add.text(16, st + 18, 'WAVE 0/0', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '13px',
         fontStyle: 'bold',
         color: '#9fd6ff',
-    }).setOrigin(0, 0.5).setDepth(100);
+    }).setOrigin(0, 0.5).setDepth(100).setStroke('#0a0a12', 2).setShadow(0, 1, '#000000', 2, true, true);
 
     this.hudCombo = this.add.text(width * 0.5, st + 88, 'x0', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '34px',
         fontStyle: 'bold',
         color: '#ffe080',
-    }).setOrigin(0.5).setDepth(110).setAlpha(0);
+    }).setOrigin(0.5).setDepth(110).setAlpha(0).setStroke('#1a0d00', 3).setShadow(0, 2, '#000000', 4, true, true);
 
     this.hudFever = this.add.text(width * 0.5, st + 128, 'FEVER!', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '40px',
         fontStyle: 'bold',
         color: '#ff78ff',
-    }).setOrigin(0.5).setDepth(112).setAlpha(0);
+    }).setOrigin(0.5).setDepth(112).setAlpha(0).setStroke('#2a0022', 3).setShadow(0, 2, '#000000', 4, true, true);
 
     this.hudShip = this.add.text(width - 24, st + 36, '', {
         fontFamily: 'system-ui, sans-serif',
